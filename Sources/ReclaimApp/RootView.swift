@@ -22,6 +22,10 @@ struct RootView: View {
                     .overlay(alignment: .top) { busyBanner }
             }
         }
+        .sheet(item: $model.celebration) { c in
+            CelebrationView(freed: c.freed, lifetime: c.lifetime)
+                .environmentObject(model)
+        }
         .task {
             model.loadQuarantine()
             model.refreshFDA()

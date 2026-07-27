@@ -60,6 +60,12 @@ final class AppModel: ObservableObject {
         let id: String; let count: Int; let bytes: Int64
     }
 
+    /// Drives the celebratory share sheet shown after quarantine is emptied.
+    struct Celebration: Identifiable {
+        let id = UUID(); let freed: Int64; let lifetime: Int64
+    }
+    @Published var celebration: Celebration?
+
     /// A single row in the unified results list, from any source.
     struct CleanItem: Identifiable, Sendable {
         let id: String            // absolute path
@@ -175,7 +181,10 @@ final class AppModel: ObservableObject {
     }
 
     var safeReclaimBytes: Int64 { items.filter(\.safe).reduce(0) { $0 + $1.bytes } }
-    var reviewBytes: Int64 { items.filter { !$0.safe && $0.selectable }.reduce(0) { $0 + $1.bytes } }
+    /// Everything worth reviewing — history, personal files, and items an open
+    /// app is currently using (blocked, but still reclaimable once it quits).
+    /// Only truly protected (Red) items are excluded.
+    var reviewBytes: Int64 { items.filter { !$0.safe && $0.tier != .red }.reduce(0) { $0 + $1.bytes } }
     var selectedBytes: Int64 { items.filter { selected.contains($0.id) }.reduce(0) { $0 + $1.bytes } }
 
     /// Accumulation clusters are multi-file personal pile-ups — shown as
@@ -248,6 +257,9 @@ final class AppModel: ObservableObject {
 
     private func emptyQuarantine(ids: [String], label: String) {
         guard busy == nil else { return }
+        // The headline "you freed X" number = what the user actually cleared.
+        // It's robust to APFS snapshot lag (free-space delta can trail reality).
+        let purged = sessions.filter { ids.contains($0.id) }.reduce(0) { $0 + $1.bytes }
         busy = label
         Task {
             let (freed, lag) = await Task.detached(priority: .userInitiated) { () -> (Int64, Bool) in
@@ -263,6 +275,9 @@ final class AppModel: ObservableObject {
             self.lastPurgeSnapshotLag = lag
             self.busy = nil
             self.loadQuarantine()
+            if purged > 0 {
+                self.celebration = Celebration(freed: purged, lifetime: self.lifetimeReclaimed)
+            }
         }
     }
 }

@@ -55,6 +55,11 @@ public struct MacStorageReport: Codable, Sendable {
     /// denied, protected files are silently skipped and land in the unitemized
     /// remainder — so the map under-itemizes until FDA is granted.
     public let fullDiskAccess: FullDiskAccess.Status
+    /// The largest files in each category (keyed by category id), so My Mac can
+    /// drill in, filter, and let the user bulk-select. Capped per category and
+    /// floored at a minimum size — the long tail of tiny files isn't
+    /// individually reclaimable and would bloat the catalog.
+    public let filesByCategory: [String: [ClusterFile]]
     public let elapsedSeconds: Double
 
     public var usedFraction: Double {
@@ -67,6 +72,7 @@ public struct MacStorageReport: Codable, Sendable {
                 overMeasured: Bool, totalFileCount: Int,
                 snapshots: SnapshotStatus,
                 fullDiskAccess: FullDiskAccess.Status,
+                filesByCategory: [String: [ClusterFile]] = [:],
                 elapsedSeconds: Double) {
         self.scannedAt = scannedAt
         self.hostname = hostname
@@ -80,6 +86,7 @@ public struct MacStorageReport: Codable, Sendable {
         self.totalFileCount = totalFileCount
         self.snapshots = snapshots
         self.fullDiskAccess = fullDiskAccess
+        self.filesByCategory = filesByCategory
         self.elapsedSeconds = elapsedSeconds
     }
 }
@@ -234,6 +241,47 @@ public struct MacStorageMap: Sendable {
         return "systemdata"
     }
 
+    // Catalog tuning: only files ≥ floor are individually browsable; keep the
+    // largest N per category, trimming when the working list gets big.
+    static let catalogFloorBytes: Int64 = 1024 * 1024        // 1 MB
+    static let catalogKeepPerCategory = 1500
+    static let catalogTrimAt = 4000
+
+    /// Bundles treated as atomic: their internals must NEVER be listed as
+    /// individually deletable. Removing a file inside a .photoslibrary or .app
+    /// corrupts it (plan §02). Their bytes still count toward category totals.
+    static let atomicBundleSuffixes = [
+        ".photoslibrary", ".migratedphotolibrary", ".aplibrary",
+        ".musiclibrary", ".tvlibrary", ".imovielibrary", ".fcpbundle",
+        ".app", ".framework", ".bundle", ".plugin", ".photobooklibrary",
+    ]
+
+    /// True if the path lives inside one of the atomic bundles above.
+    static func insideAtomicBundle(_ path: String) -> Bool {
+        atomicBundleSuffixes.contains { path.contains($0 + "/") }
+    }
+
+    /// True if the path IS an atomic bundle (ends with one of the suffixes).
+    public static func isAtomicBundle(_ path: String) -> Bool {
+        atomicBundleSuffixes.contains { path.hasSuffix($0) }
+    }
+
+    /// The shallowest atomic-bundle ancestor of a path (the bundle itself if the
+    /// path is one), else nil. Used to fold bundle contents into one entry.
+    static func atomicBundleRoot(_ path: String) -> String? {
+        var best: String?
+        for suffix in atomicBundleSuffixes {
+            var root: String?
+            if let r = path.range(of: suffix + "/") {
+                root = String(path[..<r.lowerBound]) + suffix
+            } else if path.hasSuffix(suffix) {
+                root = path
+            }
+            if let root, best == nil || root.count < best!.count { best = root }
+        }
+        return best
+    }
+
     // MARK: - Run
 
     public func run(progress: (@Sendable (Int) -> Void)? = nil) -> MacStorageReport {
@@ -244,10 +292,14 @@ public struct MacStorageMap: Sendable {
 
         var bytesByKey: [String: Int64] = [:]
         var countByKey: [String: Int] = [:]
+        var filesByKey: [String: [ClusterFile]] = [:]
+        var bundleBytes: [String: Int64] = [:]   // atomic bundle → summed size
+        var bundleKey: [String: String] = [:]     // atomic bundle → category
         var totalFiles = 0
 
         let sizeKeys: Set<URLResourceKey> = [
             .totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .isRegularFileKey,
+            .contentModificationDateKey,
         ]
 
         // One pass over the entire data volume — every readable file is
@@ -271,11 +323,39 @@ public struct MacStorageMap: Sendable {
                 countByKey[key, default: 0] += 1
                 totalFiles += 1
                 if totalFiles % 100_000 == 0 { progress?(totalFiles) }
+
+                // Catalog. Files inside an atomic bundle (.photoslibrary, .app…)
+                // are summed into ONE bundle entry — never listed individually,
+                // since deleting bundle internals corrupts them.
+                if let bundle = Self.atomicBundleRoot(item.path) {
+                    bundleBytes[bundle, default: 0] += bytes
+                    if bundleKey[bundle] == nil { bundleKey[bundle] = Self.classify(bundle, home: home) }
+                } else if bytes >= Self.catalogFloorBytes {
+                    filesByKey[key, default: []].append(
+                        ClusterFile(path: item.path, bytes: bytes, modified: v.contentModificationDate))
+                    if filesByKey[key]!.count > Self.catalogTrimAt {
+                        filesByKey[key] = Array(filesByKey[key]!
+                            .sorted { $0.bytes > $1.bytes }.prefix(Self.catalogKeepPerCategory))
+                    }
+                }
             }
         }
 
         let measured = bytesByKey.values.reduce(0, +)
         let overMeasured = measured > used && used > 0
+
+        // Fold each atomic bundle in as a single entry (whole Photos library,
+        // each .app, etc.) so it's visible and openable but not piece-deletable.
+        for (bpath, btot) in bundleBytes where btot >= Self.catalogFloorBytes {
+            let key = bundleKey[bpath] ?? Self.classify(bpath, home: home)
+            let mod = (try? FileManager.default.attributesOfItem(atPath: bpath)[.modificationDate]) as? Date
+            filesByKey[key, default: []].append(ClusterFile(path: bpath, bytes: btot, modified: mod))
+        }
+
+        // Final catalog: largest-first, capped per category.
+        let filesByCategory = filesByKey.mapValues {
+            Array($0.sorted { $0.bytes > $1.bytes }.prefix(Self.catalogKeepPerCategory))
+        }
 
         let categories = Self.buildCategories(
             bytesByKey: bytesByKey, countByKey: countByKey,
@@ -294,6 +374,7 @@ public struct MacStorageMap: Sendable {
             totalFileCount: totalFiles,
             snapshots: SnapshotProbe.status(),
             fullDiskAccess: FullDiskAccess.status(),
+            filesByCategory: filesByCategory,
             elapsedSeconds: Date().timeIntervalSince(start))
     }
 

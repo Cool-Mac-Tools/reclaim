@@ -68,8 +68,11 @@ struct ScanView: View {
                 Section { hero.listRowSeparator(.hidden) }
 
                 let safe = model.items.filter(\.safe)
-                let review = model.items.filter { !$0.safe && $0.selectable }
-                let blocked = model.items.filter { !$0.selectable }
+                // "Review" now includes anything blocked by a running app — its
+                // reclaimable value shouldn't hide in a side section. Only truly
+                // protected (Red) items are split out.
+                let review = model.items.filter { !$0.safe && $0.tier != .red }
+                let protectedItems = model.items.filter { $0.tier == .red }
 
                 if !safe.isEmpty {
                     Section {
@@ -85,18 +88,8 @@ struct ScanView: View {
                 if !review.isEmpty {
                     Section {
                         ForEach(review) { row($0) }
-                    } header: { groupHeader("Review & choose", "History and personal files. We explain each — you decide.", review) }
-                }
-                // Non-selectable splits by reason: app running (temporary) vs
-                // system-protected (permanent). Only Red items are truly protected.
-                let appBlocked = blocked.filter { $0.tier != .red }
-                let protectedItems = blocked.filter { $0.tier == .red }
-
-                if !appBlocked.isEmpty {
-                    Section {
-                        ForEach(appBlocked) { row($0) }
-                    } header: { Text("Waiting on apps you have open") }
-                        footer: { Text("Quit these apps and hit Rescan — then they can be cleaned. Reclaim won't clear data out from under a running app.") }
+                    } header: { groupHeader("More to review", "History and personal files — plus anything an open app is using. We explain each; you decide.", review) }
+                        footer: { Text("Rows with a pause icon are in use by an app you have open — quit it and hit Rescan to clean them. Reclaim won't clear data out from under a running app.") }
                 }
                 if !protectedItems.isEmpty {
                     Section {

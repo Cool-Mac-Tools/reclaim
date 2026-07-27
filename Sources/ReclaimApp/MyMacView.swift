@@ -6,10 +6,14 @@ import ReclaimCore
 /// disk's real used space, so it matches About This Mac.
 struct MyMacView: View {
     @EnvironmentObject var model: AppModel
+    @State private var drill: MyMacDrill?
+
+    // One scan feeds both pages: My Mac and the Reclaim suggestions.
+    private var scanningNow: Bool { model.mapping || model.scanning }
 
     var body: some View {
         Group {
-            if model.mapping && model.mapReport == nil {
+            if scanningNow && model.mapReport == nil {
                 scanning
             } else if let report = model.mapReport {
                 results(report)
@@ -20,10 +24,10 @@ struct MyMacView: View {
         .navigationTitle("My Mac")
         .toolbar {
             if model.mapReport != nil {
-                Button { model.mapMac() } label: {
+                Button { model.runEverything() } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")
                 }
-                .disabled(model.mapping)
+                .disabled(scanningNow)
             }
         }
     }
@@ -38,7 +42,7 @@ struct MyMacView: View {
                    + "documents, caches, and system data — measured against your disk's "
                    + "real capacity. Viewing only; nothing is changed.",
             actionTitle: "Scan My Mac",
-            action: { model.mapMac() })
+            action: { model.runEverything() })
     }
 
     private var scanning: some View {
@@ -68,7 +72,10 @@ struct MyMacView: View {
         }
         .listStyle(.inset)
         .overlay(alignment: .top) {
-            if model.mapping { refreshingChip }
+            if scanningNow { refreshingChip }
+        }
+        .sheet(item: $drill) { d in
+            CategoryBrowser(drill: d).environmentObject(model)
         }
     }
 
@@ -99,7 +106,22 @@ struct MyMacView: View {
         }
     }
 
-    private func row(_ c: StorageCategory, report: MacStorageReport) -> some View {
+    @ViewBuilder private func row(_ c: StorageCategory, report: MacStorageReport) -> some View {
+        let files = report.filesByCategory[c.key] ?? []
+        if files.isEmpty {
+            rowContent(c, report: report, browsable: false)
+        } else {
+            Button {
+                drill = MyMacDrill(category: c, files: files)
+            } label: {
+                rowContent(c, report: report, browsable: true)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func rowContent(_ c: StorageCategory, report: MacStorageReport, browsable: Bool) -> some View {
         let pct = report.usedBytes > 0 ? Double(c.bytes) / Double(report.usedBytes) * 100 : 0
         return HStack(spacing: 12) {
             Image(systemName: c.symbol)
@@ -122,6 +144,8 @@ struct MyMacView: View {
             Text(String(format: "%.0f%%", pct))
                 .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
                 .frame(width: 38, alignment: .trailing)
+            Image(systemName: "chevron.right")
+                .font(.caption).foregroundStyle(.tertiary).opacity(browsable ? 1 : 0)
         }
         .padding(.vertical, 3)
     }
