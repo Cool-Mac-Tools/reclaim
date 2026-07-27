@@ -364,7 +364,7 @@ public struct MacStorageMap: Sendable {
                 bytesByKey[key, default: 0] += bytes
                 countByKey[key, default: 0] += 1
                 totalFiles += 1
-                if totalFiles % 100_000 == 0 { progress?(totalFiles) }
+                if totalFiles % 5_000 == 0 { progress?(totalFiles) }
 
                 // Catalog. Files inside an atomic bundle (.photoslibrary, .app…)
                 // are summed into ONE bundle entry — never listed individually,

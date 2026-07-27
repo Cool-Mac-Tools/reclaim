@@ -143,9 +143,20 @@ final class AppModel: ObservableObject {
                 })
             }.value
             self.mapReport = report
+            // Remember the file count so the next scan's progress bar can fill
+            // against a real target instead of guessing.
+            UserDefaults.standard.set(report.totalFileCount, forKey: Self.lastFileCountKey)
             self.mapping = false
             self.hasMapped = true
         }
+    }
+
+    private static let lastFileCountKey = "reclaim.lastFileCount"
+    /// Expected total files for the progress bar — the last scan's count, or a
+    /// sensible default the first time.
+    var expectedFileTotal: Int {
+        let saved = UserDefaults.standard.integer(forKey: Self.lastFileCountKey)
+        return saved > 10_000 ? saved : 1_200_000
     }
 
     private nonisolated static func doScan() async -> ScanReport {

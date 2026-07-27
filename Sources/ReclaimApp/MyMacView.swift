@@ -8,6 +8,9 @@ struct MyMacView: View {
     @EnvironmentObject var model: AppModel
     @State private var drill: MyMacDrill?
     @State private var showDuplicates = false
+    @State private var displayedCount: Double = 0   // smoothly tweened file counter
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let ticker = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common).autoconnect()
 
     // One scan feeds both pages: My Mac and the Reclaim suggestions.
     private var scanningNow: Bool { model.mapping || model.scanning }
@@ -56,20 +59,24 @@ struct MyMacView: View {
         }
     }
 
+    /// Fraction 0…1 for the bar, capped just below full until the scan actually
+    /// finishes (the estimate can be off; we never want it to sit at 100%).
+    private var scanFraction: Double {
+        min(0.98, displayedCount / Double(max(1, model.expectedFileTotal)))
+    }
+
     private var scanning: some View {
         VStack(spacing: 18) {
             Image(systemName: "internaldrive")
                 .font(.system(size: 42)).foregroundStyle(.tint)
             Text("Scanning your Mac").font(.title3.weight(.semibold))
-            ProgressView().progressViewStyle(.linear).frame(maxWidth: 300)
+            ProgressView(value: scanFraction).progressViewStyle(.linear).frame(maxWidth: 300)
             VStack(spacing: 4) {
                 Text(scanStage)
                     .font(.callout).foregroundStyle(.secondary)
                     .contentTransition(.opacity).animation(.default, value: scanStage)
-                if model.mapProgressFiles > 0 {
-                    Text("\(model.mapProgressFiles.formatted()) files scanned")
-                        .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
-                }
+                Text("\(Int(displayedCount).formatted()) files scanned")
+                    .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
             }
             Text("This one's thorough — it walks your whole disk. Takes a bit longer than a quick scan.")
                 .font(.caption).foregroundStyle(.tertiary)
@@ -77,6 +84,18 @@ struct MyMacView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(40)
+        .onAppear { displayedCount = 0 }
+        .onReceive(ticker) { _ in
+            let target = Double(model.mapProgressFiles)
+            guard displayedCount < target else { return }
+            if reduceMotion {
+                displayedCount = target
+            } else {
+                // Ease toward the real count so the number races up smoothly
+                // between the (every-5k-files) real updates.
+                displayedCount = min(target, displayedCount + max(600, (target - displayedCount) * 0.12))
+            }
+        }
     }
 
     // MARK: Results
