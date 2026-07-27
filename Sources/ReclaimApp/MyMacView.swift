@@ -7,6 +7,7 @@ import ReclaimCore
 struct MyMacView: View {
     @EnvironmentObject var model: AppModel
     @State private var drill: MyMacDrill?
+    @State private var showDuplicates = false
 
     // One scan feeds both pages: My Mac and the Reclaim suggestions.
     private var scanningNow: Bool { model.mapping || model.scanning }
@@ -62,6 +63,11 @@ struct MyMacView: View {
             Section {
                 header(report).listRowSeparator(.hidden)
             }
+            if !report.duplicates.isEmpty {
+                Section {
+                    duplicatesCard(report)
+                }
+            }
             Section {
                 ForEach(report.categories) { row($0, report: report) }
             } header: {
@@ -77,6 +83,31 @@ struct MyMacView: View {
         .sheet(item: $drill) { d in
             CategoryBrowser(drill: d).environmentObject(model)
         }
+        .sheet(isPresented: $showDuplicates) {
+            DuplicatesView(groups: model.mapReport?.duplicates ?? []).environmentObject(model)
+        }
+    }
+
+    /// A highlighted entry point to the duplicate finder, above the category map.
+    private func duplicatesCard(_ report: MacStorageReport) -> some View {
+        Button { showDuplicates = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.on.doc.fill")
+                    .foregroundStyle(.tint).frame(width: 22)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Duplicate files").fontWeight(.semibold)
+                    Text("\(report.duplicates.count) group\(report.duplicates.count == 1 ? "" : "s") of identical files — keep one, reclaim the rest")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(Fmt.bytes(report.duplicateReclaimableBytes))
+                    .monospacedDigit().foregroundStyle(.green)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+            .padding(.vertical, 3)
+        }
+        .buttonStyle(.plain)
     }
 
     private func header(_ report: MacStorageReport) -> some View {

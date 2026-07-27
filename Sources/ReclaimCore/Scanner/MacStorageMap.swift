@@ -60,7 +60,15 @@ public struct MacStorageReport: Codable, Sendable {
     /// floored at a minimum size — the long tail of tiny files isn't
     /// individually reclaimable and would bloat the catalog.
     public let filesByCategory: [String: [ClusterFile]]
+    /// Byte-identical file groups found across the catalog — keep one, reclaim
+    /// the rest. Largest reclaimable first.
+    public let duplicates: [DuplicateGroup]
     public let elapsedSeconds: Double
+
+    /// Total space recoverable by de-duplicating (keeping one copy per group).
+    public var duplicateReclaimableBytes: Int64 {
+        duplicates.reduce(0) { $0 + $1.reclaimableBytes }
+    }
 
     public var usedFraction: Double {
         capacityBytes > 0 ? Double(usedBytes) / Double(capacityBytes) : 0
@@ -73,6 +81,7 @@ public struct MacStorageReport: Codable, Sendable {
                 snapshots: SnapshotStatus,
                 fullDiskAccess: FullDiskAccess.Status,
                 filesByCategory: [String: [ClusterFile]] = [:],
+                duplicates: [DuplicateGroup] = [],
                 elapsedSeconds: Double) {
         self.scannedAt = scannedAt
         self.hostname = hostname
@@ -87,6 +96,7 @@ public struct MacStorageReport: Codable, Sendable {
         self.snapshots = snapshots
         self.fullDiskAccess = fullDiskAccess
         self.filesByCategory = filesByCategory
+        self.duplicates = duplicates
         self.elapsedSeconds = elapsedSeconds
     }
 }
@@ -357,6 +367,17 @@ public struct MacStorageMap: Sendable {
             Array($0.sorted { $0.bytes > $1.bytes }.prefix(Self.catalogKeepPerCategory))
         }
 
+        // Duplicate groups — restricted to personal-content categories. Dev
+        // and system files (node binaries, toolchain libs, package caches) are
+        // often intentionally duplicated and load-bearing; removing a copy can
+        // break a project even reversibly. Those belong to repo-aware review.
+        let dedupKeys: Set<String> = ["photos", "movies", "music", "documents", "downloads"]
+        let dedupCandidates = filesByCategory
+            .filter { dedupKeys.contains($0.key) }
+            .values.flatMap { $0 }
+            .filter { !Self.isAtomicBundle($0.path) }
+        let duplicates = DuplicateFinder.find(in: dedupCandidates)
+
         let categories = Self.buildCategories(
             bytesByKey: bytesByKey, countByKey: countByKey,
             usedBytes: used, measuredBytes: measured)
@@ -375,6 +396,7 @@ public struct MacStorageMap: Sendable {
             snapshots: SnapshotProbe.status(),
             fullDiskAccess: FullDiskAccess.status(),
             filesByCategory: filesByCategory,
+            duplicates: duplicates,
             elapsedSeconds: Date().timeIntervalSince(start))
     }
 

@@ -304,6 +304,41 @@ import Foundation
     }
 }
 
+@Suite struct DuplicateFinderTests {
+    @Test func groupsIdenticalFilesAndComputesReclaimable() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dup-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let payload = Data(repeating: 7, count: 200_000)
+        for name in ["a.bin", "b.bin", "c.bin"] {
+            try payload.write(to: root.appendingPathComponent(name))
+        }
+        try Data(repeating: 9, count: 200_000).write(to: root.appendingPathComponent("u.bin"))
+
+        let files = ["a.bin", "b.bin", "c.bin", "u.bin"].map {
+            ClusterFile(path: root.appendingPathComponent($0).path, bytes: 200_000, modified: nil)
+        }
+        let groups = DuplicateFinder.find(in: files)
+        #expect(groups.count == 1)                       // only a/b/c match
+        #expect(groups.first?.count == 3)
+        #expect(groups.first?.reclaimableBytes == 400_000) // 2 extra copies × 200 KB
+    }
+
+    @Test func sameSizeDifferentContentIsNotADuplicate() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dup2-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        try Data(repeating: 1, count: 50_000).write(to: root.appendingPathComponent("x.bin"))
+        try Data(repeating: 2, count: 50_000).write(to: root.appendingPathComponent("y.bin"))
+        let files = ["x.bin", "y.bin"].map {
+            ClusterFile(path: root.appendingPathComponent($0).path, bytes: 50_000, modified: nil)
+        }
+        #expect(DuplicateFinder.find(in: files).isEmpty)
+    }
+}
+
 @Suite struct MacStorageMapTests {
     @Test func classifyRoutesHomeFolders() {
         let home = "/Users/x"
