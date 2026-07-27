@@ -180,6 +180,22 @@ public struct MacStorageMap: Sendable {
                     + "and shared data outside your home folder."),
         .init(key: "otherusers", name: "Other Users", symbol: "person.2",
               detail: "Files belonging to other user accounts and the shared folder."),
+        // ── Remainder, itemized into its real parts ──────────────────
+        .init(key: "protected", name: "Protected Data", symbol: "lock.doc",
+              detail: "Data on your disk Reclaim can't read yet — Messages, Mail, and "
+                    + "app containers. Grant Full Disk Access to itemize and clean it."),
+        .init(key: "macos", name: "macOS System", symbol: "apple.logo",
+              detail: "The sealed macOS system volume. Read-only and protected — never "
+                    + "removable, and not counted against your personal space."),
+        .init(key: "preboot", name: "System Update Files", symbol: "arrow.triangle.2.circlepath",
+              detail: "The Preboot/Update volumes macOS uses to install updates. Shrinks "
+                    + "on its own after an update settles."),
+        .init(key: "vmswap", name: "Virtual Memory", symbol: "memorychip",
+              detail: "Swap and sleep-image files macOS manages automatically. Not safe "
+                    + "to remove by hand — the system reclaims it as needed."),
+        .init(key: "snapshots", name: "Snapshots & Other", symbol: "clock.arrow.circlepath",
+              detail: "Time Machine local snapshots pinning changed blocks, plus anything "
+                    + "left unaccounted. Snapshots expire on their own within ~24h."),
         .init(key: "system", name: "macOS System & Snapshots", symbol: "gearshape",
               detail: "The sealed macOS system volume, virtual-memory swap, and Time "
                     + "Machine snapshots — plus any files permissions blocked. Mostly "
@@ -378,9 +394,10 @@ public struct MacStorageMap: Sendable {
             .filter { !Self.isAtomicBundle($0.path) }
         let duplicates = DuplicateFinder.find(in: dedupCandidates)
 
-        let categories = Self.buildCategories(
+        let categories = Self.categoriesWithItemizedRemainder(
             bytesByKey: bytesByKey, countByKey: countByKey,
-            usedBytes: used, measuredBytes: measured)
+            usedBytes: used, measuredBytes: measured,
+            dataRoot: root, volumeUsed: volumeUsage())
 
         return MacStorageReport(
             scannedAt: start,
@@ -400,34 +417,94 @@ public struct MacStorageMap: Sendable {
             elapsedSeconds: Date().timeIntervalSince(start))
     }
 
-    /// Turns raw per-key byte tallies into display categories plus the
+    /// The itemized (walked) file categories — one per non-empty key.
+    static func fileCategories(bytesByKey: [String: Int64],
+                               countByKey: [String: Int]) -> [StorageCategory] {
+        bytesByKey.filter { $0.value > 0 }.map { key, bytes in
+            let s = spec(key)
+            return StorageCategory(key: key, name: s.name, bytes: bytes,
+                                   fileCount: countByKey[key] ?? 0,
+                                   symbol: s.symbol, detail: s.detail, itemized: true)
+        }
+    }
+
+    /// A single non-itemized remainder entry.
+    static func remainderEntry(_ key: String, _ bytes: Int64) -> StorageCategory {
+        let s = spec(key)
+        return StorageCategory(key: key, name: s.name, bytes: bytes, fileCount: 0,
+                               symbol: s.symbol, detail: s.detail, itemized: false)
+    }
+
+    /// Turns raw per-key byte tallies into display categories plus a single
     /// reconciling remainder. Invariant: when `measured <= used`, the returned
     /// categories' bytes sum to EXACTLY `usedBytes`. Kept pure for testing.
     static func buildCategories(bytesByKey: [String: Int64],
                                 countByKey: [String: Int],
                                 usedBytes: Int64,
                                 measuredBytes: Int64) -> [StorageCategory] {
-        var out: [StorageCategory] = bytesByKey
-            .filter { $0.value > 0 }
-            .map { key, bytes in
-                let s = spec(key)
-                return StorageCategory(key: key, name: s.name, bytes: bytes,
-                                       fileCount: countByKey[key] ?? 0,
-                                       symbol: s.symbol, detail: s.detail, itemized: true)
-            }
-
-        // The honest gap: everything on the disk we couldn't walk (System,
-        // other users, anything outside home). Clamped at 0 — if we somehow
-        // measured more than the disk reports used (clones/hardlinks), there's
-        // no remainder to show and `overMeasured` flags the approximation.
+        var out = fileCategories(bytesByKey: bytesByKey, countByKey: countByKey)
         let remainder = max(0, usedBytes - measuredBytes)
-        if remainder > 0 {
-            let s = spec("system")
-            out.append(StorageCategory(key: s.key, name: s.name, bytes: remainder,
-                                       fileCount: 0, symbol: s.symbol,
-                                       detail: s.detail, itemized: false))
-        }
+        if remainder > 0 { out.append(remainderEntry("system", remainder)) }
         return out.sorted { $0.bytes > $1.bytes }
+    }
+
+    /// Like `buildCategories`, but breaks the remainder into its real parts
+    /// using per-volume usage (`df`): protected/unreadable data on the data
+    /// volume, the sealed macOS system volume, update volumes, VM swap, and a
+    /// snapshots-and-other residual. Still reconciles EXACTLY to `usedBytes`.
+    static func categoriesWithItemizedRemainder(
+        bytesByKey: [String: Int64], countByKey: [String: Int],
+        usedBytes: Int64, measuredBytes: Int64,
+        dataRoot: String, volumeUsed: [String: Int64]) -> [StorageCategory] {
+
+        var out = fileCategories(bytesByKey: bytesByKey, countByKey: countByKey)
+        let remainder = max(0, usedBytes - measuredBytes)
+        guard remainder > 0 else { return out.sorted { $0.bytes > $1.bytes } }
+
+        // Fall back to one bucket if we can't measure the split volumes.
+        guard dataRoot == "/System/Volumes/Data", !volumeUsed.isEmpty else {
+            out.append(remainderEntry("system", remainder))
+            return out.sorted { $0.bytes > $1.bytes }
+        }
+
+        // Assign the remainder in priority order so the pieces sum to EXACTLY
+        // the remainder (no over- or under-count), even if a volume overflows.
+        var budget = remainder
+        func take(_ v: Int64) -> Int64 { let t = max(0, min(v, budget)); budget -= t; return t }
+        func add(_ key: String, _ v: Int64) { if v > 0 { out.append(remainderEntry(key, v)) } }
+
+        let dataUsed = volumeUsed["/System/Volumes/Data"] ?? 0
+        add("protected", take(max(0, dataUsed - measuredBytes)))         // FDA gap
+        add("macos", take(volumeUsed["/"] ?? 0))                          // sealed system
+        add("preboot", take((volumeUsed["/System/Volumes/Preboot"] ?? 0)
+                          + (volumeUsed["/System/Volumes/Update"] ?? 0)))
+        add("vmswap", take(volumeUsed["/System/Volumes/VM"] ?? 0))
+        add("snapshots", budget)                                          // residual
+
+        return out.sorted { $0.bytes > $1.bytes }
+    }
+
+    /// Per-volume used bytes via `df -k`, keyed by mount point. APFS shares
+    /// container free space, so this is the reliable way to size each volume.
+    func volumeUsage() -> [String: Int64] {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/df")
+        task.arguments = ["-k"]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = Pipe()
+        guard (try? task.run()) != nil else { return [:] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        guard let text = String(data: data, encoding: .utf8) else { return [:] }
+        var out: [String: Int64] = [:]
+        for line in text.split(separator: "\n").dropFirst() {
+            let f = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard f.count >= 9, let usedK = Int64(f[2]) else { continue }
+            let mount = f[8...].joined(separator: " ")
+            out[mount] = usedK * 1024
+        }
+        return out
     }
 
     // MARK: - Volume facts

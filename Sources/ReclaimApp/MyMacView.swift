@@ -229,6 +229,11 @@ func categoryColor(_ key: String) -> Color {
     case "userother":    .yellow
     case "systemdata":   .gray
     case "otherusers":   .indigo
+    case "protected":    .orange
+    case "macos":        .gray
+    case "preboot":      .gray
+    case "vmswap":       .gray
+    case "snapshots":    .secondary
     case "system":       .secondary
     default:             .secondary
     }
