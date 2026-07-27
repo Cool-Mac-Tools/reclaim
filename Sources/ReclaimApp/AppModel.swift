@@ -12,12 +12,14 @@ final class AppModel: ObservableObject {
         case scan       = "Reclaim"
         case myMac      = "My Mac"
         case quarantine = "Quarantine"
+        case history    = "History"
         var id: String { rawValue }
         var symbol: String {
             switch self {
             case .scan:       "arrow.clockwise"
             case .myMac:      "internaldrive"
             case .quarantine: "arrow.uturn.backward.circle"
+            case .history:    "chart.bar.xaxis"
             }
         }
     }
@@ -44,6 +46,8 @@ final class AppModel: ObservableObject {
     // Quarantine
     @Published var sessions: [QuarantineSummary] = []
     @Published var lifetimeReclaimed: Int64 = 0
+    /// Full cleanup history (newest first), for the History timeline.
+    @Published var history: [CleanupLedgerEntry] = []
     @Published var lastStagedBytes: Int64 = 0     // moved to quarantine, not yet freed
     @Published var lastFreedBytes: Int64?         // actual space freed by last purge
     @Published var lastPurgeSnapshotLag = false
@@ -235,7 +239,9 @@ final class AppModel: ObservableObject {
             let entries = (try? Quarantine(sessionID: id).manifest()) ?? []
             return QuarantineSummary(id: id, count: entries.count, bytes: entries.reduce(0) { $0 + $1.bytes })
         }
-        lifetimeReclaimed = LedgerStore().lifetimeQuarantinedBytes
+        let ledger = LedgerStore()
+        lifetimeReclaimed = ledger.lifetimeQuarantinedBytes
+        history = ledger.all().reversed()   // newest first
     }
 
     func restore(_ id: String) {

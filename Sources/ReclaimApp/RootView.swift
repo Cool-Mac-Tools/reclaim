@@ -42,6 +42,7 @@ struct RootView: View {
         case .scan:       ScanView()
         case .myMac:      MyMacView()
         case .quarantine: QuarantineView()
+        case .history:    HistoryView()
         }
     }
 
