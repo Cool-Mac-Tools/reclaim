@@ -46,14 +46,37 @@ struct MyMacView: View {
             action: { model.runEverything() })
     }
 
+    /// Which stage of the scan we're in, inferred from files-walked so far.
+    private var scanStage: String {
+        switch model.mapProgressFiles {
+        case 0:            "Starting scan…"
+        case ..<200_000:   "Reading your files…"
+        case ..<800_000:   "Measuring apps, caches & media…"
+        default:           "Reconciling with your disk & finding duplicates…"
+        }
+    }
+
     private var scanning: some View {
-        VStack(spacing: 14) {
-            ProgressView().controlSize(.large)
-            Text("Measuring your Mac…").font(.headline)
-            Text("Walking your files and reconciling against real disk usage")
-                .font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 18) {
+            Image(systemName: "internaldrive")
+                .font(.system(size: 42)).foregroundStyle(.tint)
+            Text("Scanning your Mac").font(.title3.weight(.semibold))
+            ProgressView().progressViewStyle(.linear).frame(maxWidth: 300)
+            VStack(spacing: 4) {
+                Text(scanStage)
+                    .font(.callout).foregroundStyle(.secondary)
+                    .contentTransition(.opacity).animation(.default, value: scanStage)
+                if model.mapProgressFiles > 0 {
+                    Text("\(model.mapProgressFiles.formatted()) files scanned")
+                        .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
+                }
+            }
+            Text("This one's thorough — it walks your whole disk. Takes a bit longer than a quick scan.")
+                .font(.caption).foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center).frame(maxWidth: 360)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 
     // MARK: Results
@@ -216,8 +239,7 @@ struct MyMacView: View {
 func categoryColor(_ key: String) -> Color {
     switch key {
     case "applications": .blue
-    case "photos":       .pink
-    case "movies":       .purple
+    case "media":        .pink
     case "music":        .red
     case "documents":    .teal
     case "downloads":    .cyan

@@ -348,10 +348,17 @@ import Foundation
         #expect(MacStorageMap.classify(home + "/Library/Mail/x", home: home) == "mail")
         #expect(MacStorageMap.classify(home + "/Library/Messages/chat.db", home: home) == "messages")
         #expect(MacStorageMap.classify(home + "/Library/Application Support/App/x", home: home) == "appdata")
-        #expect(MacStorageMap.classify(home + "/Pictures/Lib.photoslibrary/x", home: home) == "photos")
+        #expect(MacStorageMap.classify(home + "/Pictures/Lib.photoslibrary/x", home: home) == "media")
         #expect(MacStorageMap.classify(home + "/Documents/report.pdf", home: home) == "documents")
         #expect(MacStorageMap.classify(home + "/Desktop/note.txt", home: home) == "documents")
         #expect(MacStorageMap.classify(home + "/Downloads/big.dmg", home: home) == "downloads")
+        // Photos & videos are routed by file type, wherever they live.
+        #expect(MacStorageMap.classify(home + "/Downloads/clip.mov", home: home) == "media")
+        #expect(MacStorageMap.classify(home + "/Documents/vacation.jpg", home: home) == "media")
+        #expect(MacStorageMap.classify(home + "/Desktop/screenshot.png", home: home) == "media")
+        #expect(MacStorageMap.classify(home + "/Movies/film.mkv", home: home) == "media")
+        // …but media inside app/cache locations stays with its app, not "media".
+        #expect(MacStorageMap.classify(home + "/Library/Caches/app/img.png", home: home) == "developer")
         #expect(MacStorageMap.classify(home + "/.npm/cache/x", home: home) == "developer")
         #expect(MacStorageMap.classify(home + "/Code/project/main.swift", home: home) == "userother")
     }

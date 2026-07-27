@@ -39,6 +39,7 @@ final class AppModel: ObservableObject {
     @Published var mapping = false
     @Published var hasMapped = false
     @Published var mapReport: MacStorageReport?
+    @Published var mapProgressFiles = 0   // live file count during the walk
 
     /// Paths the user has chosen to clean. Seeded with the safe set after a scan.
     @Published var selected: Set<String> = []
@@ -134,9 +135,12 @@ final class AppModel: ObservableObject {
     func mapMac() {
         guard !mapping else { return }
         mapping = true
+        mapProgressFiles = 0
         Task {
             let report = await Task.detached(priority: .userInitiated) {
-                MacStorageMap().run()
+                MacStorageMap().run(progress: { files in
+                    Task { @MainActor in self.mapProgressFiles = files }
+                })
             }.value
             self.mapReport = report
             self.mapping = false

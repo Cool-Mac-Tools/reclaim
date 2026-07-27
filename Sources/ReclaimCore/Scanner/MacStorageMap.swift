@@ -153,10 +153,8 @@ public struct MacStorageMap: Sendable {
     static let specs: [CategorySpec] = [
         .init(key: "applications", name: "Applications", symbol: "app.badge",
               detail: "Apps installed in your Applications folders."),
-        .init(key: "photos", name: "Photos & Images", symbol: "photo.on.rectangle",
-              detail: "Your Pictures folder, including Photos libraries."),
-        .init(key: "movies", name: "Movies & Video", symbol: "film",
-              detail: "Your Movies folder and video files."),
+        .init(key: "media", name: "Photos & Videos", symbol: "photo.on.rectangle",
+              detail: "Photos and videos from across your Mac — plus your Photos library."),
         .init(key: "music", name: "Music & Audio", symbol: "music.note",
               detail: "Your Music folder and audio libraries."),
         .init(key: "documents", name: "Documents & Desktop", symbol: "doc.text",
@@ -207,6 +205,21 @@ public struct MacStorageMap: Sendable {
         specs.first { $0.key == key } ?? specs.last!
     }
 
+    /// Image + video extensions used to route personal media into "Photos &
+    /// Videos" no matter which folder it's in.
+    static let mediaExtensions: Set<String> = [
+        // images
+        "jpg", "jpeg", "png", "gif", "heic", "heif", "tiff", "tif", "bmp",
+        "webp", "raw", "cr2", "cr3", "nef", "arw", "dng", "orf", "rw2", "raf", "svg",
+        // videos
+        "mov", "mp4", "m4v", "avi", "mkv", "webm", "wmv", "flv", "mpg", "mpeg",
+        "3gp", "m2ts", "mts", "hevc",
+    ]
+
+    static func isMediaFile(_ path: String) -> Bool {
+        mediaExtensions.contains((path as NSString).pathExtension.lowercased())
+    }
+
     /// Hidden home directories that are really developer caches, not documents.
     static let devDotDirs = [".npm", ".cache", ".gradle", ".docker", ".m2",
                              ".cargo", ".rustup", ".yarn", ".gem", ".cocoapods",
@@ -244,12 +257,15 @@ public struct MacStorageMap: Sendable {
             if under("Library/Mail") { return "mail" }
             if under("Library/Messages") { return "messages" }
             if under("Library") { return "appdata" }
-            if under("Pictures") { return "photos" }
-            if under("Movies") { return "movies" }
+            for d in devDotDirs where under(d) { return "developer" }
             if under("Music") { return "music" }
+            // Photos & videos: the Pictures/Movies folders (including the Photos
+            // library bundle), plus any image/video file wherever it lives in
+            // your stuff (Downloads, Desktop, Documents, project folders…).
+            if under("Pictures") || under("Movies") { return "media" }
+            if Self.isMediaFile(path) { return "media" }
             if under("Documents") || under("Desktop") { return "documents" }
             if under("Downloads") { return "downloads" }
-            for d in devDotDirs where under(d) { return "developer" }
             return "userother"
         }
 
@@ -387,7 +403,7 @@ public struct MacStorageMap: Sendable {
         // and system files (node binaries, toolchain libs, package caches) are
         // often intentionally duplicated and load-bearing; removing a copy can
         // break a project even reversibly. Those belong to repo-aware review.
-        let dedupKeys: Set<String> = ["photos", "movies", "music", "documents", "downloads"]
+        let dedupKeys: Set<String> = ["media", "music", "documents", "downloads"]
         let dedupCandidates = filesByCategory
             .filter { dedupKeys.contains($0.key) }
             .values.flatMap { $0 }

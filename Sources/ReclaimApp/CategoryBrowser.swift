@@ -17,7 +17,7 @@ struct MyMacDrill: Identifiable {
     /// other-users, and applications are view-only — deleting individual files
     /// there is unsafe even reversibly, and apps belong to a future uninstall flow.
     static let actionableKeys: Set<String> = [
-        "photos", "movies", "music", "documents", "downloads",
+        "media", "music", "documents", "downloads",
         "userother", "trash", "developer", "appdata",
     ]
 
