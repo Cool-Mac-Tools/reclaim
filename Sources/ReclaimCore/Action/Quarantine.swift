@@ -65,6 +65,28 @@ public struct Quarantine: Sendable {
         return entry
     }
 
+    /// Move the CONTENTS of a directory into quarantine, leaving the (often
+    /// protected) container in place. macOS blocks moving/removing top-level
+    /// ~/Library folders even for their owner, but modifying files *inside*
+    /// them is allowed — so this is how we reclaim caches/logs/etc. that live
+    /// in protected containers. Returns what moved and what couldn't.
+    public func storeContents(_ dir: String, source: String, now: Date = Date())
+        -> (bytes: Int64, count: Int, failed: Int) {
+        let fm = FileManager.default
+        var bytes: Int64 = 0, count = 0, failed = 0
+        let children = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
+        for child in children {
+            let childPath = (dir as NSString).appendingPathComponent(child)
+            do {
+                let entry = try store(childPath, source: source, now: now)
+                bytes += entry.bytes; count += 1
+            } catch {
+                failed += 1
+            }
+        }
+        return (bytes, count, failed)
+    }
+
     /// Restore every entry in this session to its original location.
     /// Returns (restored, failed) path lists.
     @discardableResult

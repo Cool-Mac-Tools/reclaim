@@ -130,18 +130,36 @@ public struct CleanupExecutor: Sendable {
                                      detail: "Owned by the system or another account — needs admin rights to remove."))
                 continue
             }
+            // Try to move the whole target. If macOS blocks moving a protected
+            // container (e.g. a top-level ~/Library folder), fall back to moving
+            // its CONTENTS, which is allowed. Messages stay human-readable —
+            // never a raw NSError dump.
+            let fm = FileManager.default
+            var isDir: ObjCBool = false
+            fm.fileExists(atPath: target.path, isDirectory: &isDir)
             do {
                 let entry = try quarantine.store(target.path, source: target.source, now: now)
-                // Verify the original location is actually clear.
-                let gone = !FileManager.default.fileExists(atPath: target.path)
-                results.append(.init(
-                    path: target.path,
-                    status: gone ? .quarantined : .failed,
-                    bytes: entry.bytes,
-                    detail: gone ? "Moved to quarantine (reversible)." : "Move reported success but path still present."))
+                if !fm.fileExists(atPath: target.path) {
+                    results.append(.init(path: target.path, status: .quarantined,
+                                         bytes: entry.bytes, detail: "Moved to quarantine (reversible)."))
+                } else {
+                    results.append(.init(path: target.path, status: .failed, bytes: 0,
+                                         detail: "Move reported success but the item is still there."))
+                }
+            } catch where isDir.boolValue {
+                let r = quarantine.storeContents(target.path, source: target.source, now: now)
+                if r.count > 0 {
+                    let note = r.failed > 0
+                        ? "Cleared its contents to quarantine; \(r.failed) item(s) were in use or protected."
+                        : "Cleared its contents to quarantine (reversible)."
+                    results.append(.init(path: target.path, status: .quarantined, bytes: r.bytes, detail: note))
+                } else {
+                    results.append(.init(path: target.path, status: .skippedProtected, bytes: 0,
+                                         detail: "Protected by macOS — its contents couldn't be moved."))
+                }
             } catch {
-                results.append(.init(path: target.path, status: .failed, bytes: 0,
-                                     detail: "\(error)"))
+                results.append(.init(path: target.path, status: .skippedProtected, bytes: 0,
+                                     detail: "macOS blocked the move — this location is protected."))
             }
         }
 
