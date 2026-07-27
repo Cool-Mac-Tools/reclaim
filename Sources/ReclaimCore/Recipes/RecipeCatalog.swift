@@ -8,7 +8,7 @@ public enum RecipeCatalog {
     public static let all: [Recipe] =
         aiTools + apple + javascript + automation + general
         + virtualization + aiModels + mediaComms + creative + gaming
-        + languages + system + browsers
+        + languages + system + browsers + coverage2
 
     // MARK: - AI coding tools
 
