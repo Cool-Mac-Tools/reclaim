@@ -26,6 +26,13 @@ struct RootView: View {
             CelebrationView(freed: c.freed, lifetime: c.lifetime)
                 .environmentObject(model)
         }
+        .alert("Reclaim", isPresented: Binding(
+            get: { model.actionAlert != nil },
+            set: { if !$0 { model.actionAlert = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.actionAlert ?? "")
+        }
         .task {
             model.loadQuarantine()
             model.refreshFDA()

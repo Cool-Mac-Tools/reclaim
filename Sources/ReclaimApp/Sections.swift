@@ -206,6 +206,14 @@ struct CleanRow: View {
                 }
                 if expanded {
                     Text(item.detail).font(.callout).foregroundStyle(.secondary)
+                    if !item.impact.isEmpty {
+                        Text("If you remove it: \(item.impact)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if !item.recurrence.isEmpty {
+                        Text("Comes back? \(item.recurrence)")
+                            .font(.caption).foregroundStyle(.tertiary)
+                    }
                     Text(item.id).font(.caption.monospaced()).foregroundStyle(.tertiary).textSelection(.enabled)
                 }
                 Button(expanded ? "Less" : "Why?") { expanded.toggle() }

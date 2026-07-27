@@ -63,6 +63,7 @@ final class AppModel: ObservableObject {
 
     struct QuarantineSummary: Identifiable {
         let id: String; let count: Int; let bytes: Int64
+        let entries: [QuarantineEntry]
     }
 
     /// Drives the celebratory share sheet shown after quarantine is emptied.
@@ -70,6 +71,10 @@ final class AppModel: ObservableObject {
         let id = UUID(); let freed: Int64; let lifetime: Int64
     }
     @Published var celebration: Celebration?
+
+    /// One-shot message shown after a reclaim/restore so outcomes (and skips)
+    /// are never silent.
+    @Published var actionAlert: String?
 
     /// A single row in the unified results list, from any source.
     struct CleanItem: Identifiable, Sendable {
@@ -82,6 +87,8 @@ final class AppModel: ObservableObject {
         let selectable: Bool      // false for Red, running apps, info-only rows
         let safe: Bool            // part of the pre-selected one-click set
         var blockingApps: [String] = []  // running apps that block this item
+        var impact: String = ""          // what deletion changes / re-downloads
+        var recurrence: String = ""      // whether it grows back
     }
 
     // MARK: - Full Disk Access
@@ -174,13 +181,19 @@ final class AppModel: ObservableObject {
         var out: [CleanItem] = []
 
         for f in scanReport?.findings ?? [] {
-            let safe = f.riskTier == .green && !f.blockingAppRunning
-            let selectable = f.riskTier != .red && !f.blockingAppRunning
-            let note = f.blockingAppRunning ? "Quit the owning app first — then this can be cleaned. "
+            // Can we actually remove it? Root/other-owned items (e.g. a cache
+            // made by `sudo npm`) can't be touched without admin — mark them
+            // non-selectable with a clear reason instead of failing silently.
+            let removable = CleanupExecutor.isRemovable(f.path)
+            let safe = f.riskTier == .green && !f.blockingAppRunning && removable
+            let selectable = f.riskTier != .red && !f.blockingAppRunning && removable
+            let note = !removable ? "Owned by the system or another account — needs admin rights to remove. "
+                     : f.blockingAppRunning ? "Quit the owning app first — then this can be cleaned. "
                      : f.riskTier == .red ? "System-protected. Reclaim reports it but never removes it. " : ""
             out.append(CleanItem(id: f.path, name: f.displayName, detail: note + f.explanation,
                                  bytes: f.allocatedBytes, tier: f.riskTier, source: f.recipeID,
-                                 selectable: selectable, safe: safe, blockingApps: f.blockingApps))
+                                 selectable: selectable, safe: safe, blockingApps: f.blockingApps,
+                                 impact: f.impact, recurrence: f.recurrence))
         }
         for o in orphans where o.confidence == .likelyOrphan {
             out.append(CleanItem(id: o.path, name: "Leftover: \(o.folderName)",
@@ -222,22 +235,46 @@ final class AppModel: ObservableObject {
     /// jumps to Quarantine so the stage→empty step is obvious, and rescans.
     func reclaim(_ targets: [CleanupTarget]) {
         guard !targets.isEmpty, busy == nil else { return }
-        let bytes = targets.count
-        busy = "Reclaiming \(bytes) item(s)…"
+        busy = "Reclaiming \(targets.count) item(s)…"
         Task {
             let entry = await Task.detached(priority: .userInitiated) {
                 let df = DateFormatter(); df.dateFormat = "yyyyMMdd-HHmmss"
-                let result = CleanupExecutor(greenOnly: false).run(targets, sessionID: df.string(from: Date()))
-                try? LedgerStore().append(result)
-                return result
+                return CleanupExecutor(greenOnly: false).run(targets, sessionID: df.string(from: Date()))
             }.value
-            self.lastStagedBytes = entry.quarantinedBytes
-            self.lastFreedBytes = nil          // nothing freed yet — it's staged
+            let moved = entry.results.filter { $0.status == .quarantined }
+            let skipped = entry.results.filter { $0.status != .quarantined }
+
+            if !moved.isEmpty {
+                try? LedgerStore().append(entry)          // only log real sessions
+                self.lastStagedBytes = entry.quarantinedBytes
+                self.lastFreedBytes = nil                 // staged, not yet freed
+            } else {
+                // Nothing moved — don't leave an empty session dir behind.
+                try? Quarantine(sessionID: entry.sessionID).purge()
+            }
             self.busy = nil
             self.loadQuarantine()
-            self.section = .quarantine  // show the staged result + "Empty & Free Space"
-            self.runEverything()       // rescan so cleaned items drop off the list
+            self.actionAlert = Self.reclaimSummary(moved: moved, skipped: skipped)
+            if !moved.isEmpty { self.section = .quarantine }
+            self.runEverything()   // rescan so cleaned items drop off the list
         }
+    }
+
+    /// Honest, human summary of a reclaim attempt — including why items were skipped.
+    private static func reclaimSummary(moved: [ActionResult], skipped: [ActionResult]) -> String {
+        var lines: [String] = []
+        if !moved.isEmpty {
+            let bytes = moved.reduce(0) { $0 + $1.bytes }
+            lines.append("Moved \(moved.count) item(s) — \(Fmt.bytes(bytes)) — to quarantine.")
+        }
+        if !skipped.isEmpty {
+            lines.append("Couldn't move \(skipped.count):")
+            for (reason, group) in Dictionary(grouping: skipped, by: \.detail).prefix(4) {
+                lines.append("• \(group.count) — \(reason)")
+            }
+        }
+        if lines.isEmpty { lines.append("Nothing to reclaim.") }
+        return lines.joined(separator: "\n")
     }
 
     func toggle(_ id: String, _ on: Bool) {
@@ -250,20 +287,38 @@ final class AppModel: ObservableObject {
     // MARK: - Quarantine
 
     func loadQuarantine() {
-        sessions = Quarantine.sessions().map { id in
+        var summaries: [QuarantineSummary] = []
+        for id in Quarantine.sessions() {
             let entries = (try? Quarantine(sessionID: id).manifest()) ?? []
-            return QuarantineSummary(id: id, count: entries.count, bytes: entries.reduce(0) { $0 + $1.bytes })
+            // Purge stale empty sessions (left by failed moves) so they don't
+            // show as confusing "0 items" rows.
+            guard !entries.isEmpty else { try? Quarantine(sessionID: id).purge(); continue }
+            summaries.append(QuarantineSummary(
+                id: id, count: entries.count,
+                bytes: entries.reduce(0) { $0 + $1.bytes }, entries: entries))
         }
+        sessions = summaries
         let ledger = LedgerStore()
         lifetimeReclaimed = ledger.lifetimeQuarantinedBytes
         history = ledger.all().reversed()   // newest first
     }
 
     func restore(_ id: String) {
-        busy = "Restoring \(id)…"
+        busy = "Restoring…"
         Task {
-            _ = await Task.detached { try? Quarantine(sessionID: id).restoreAll() }.value
-            self.busy = nil; self.loadQuarantine()
+            let result = await Task.detached {
+                (try? Quarantine(sessionID: id).restoreAll()) ?? (restored: [], failed: [])
+            }.value
+            self.busy = nil
+            if result.failed.isEmpty {
+                try? Quarantine(sessionID: id).purge()   // fully restored → clear the session
+                self.actionAlert = "Restored \(result.restored.count) item(s) to their original location."
+            } else {
+                self.actionAlert = "Restored \(result.restored.count). Couldn't restore "
+                    + "\(result.failed.count) — a newer version may already exist at the "
+                    + "original spot, or the file is missing."
+            }
+            self.loadQuarantine()
         }
     }
 

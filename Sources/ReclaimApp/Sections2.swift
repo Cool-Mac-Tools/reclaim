@@ -69,15 +69,32 @@ struct QuarantineView: View {
 
             Section("In quarantine") {
                 ForEach(model.sessions) { s in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(sessionLabel(s.id)).fontWeight(.medium)
-                            Text("\(s.count) item(s)").font(.caption).foregroundStyle(.tertiary)
+                    DisclosureGroup {
+                        ForEach(s.entries, id: \.quarantinePath) { e in
+                            HStack(spacing: 8) {
+                                Image(nsImage: NSWorkspace.shared.icon(forFile: e.quarantinePath))
+                                    .resizable().frame(width: 18, height: 18)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text((e.originalPath as NSString).lastPathComponent).font(.callout)
+                                    Text(relPath(e.originalPath)).font(.caption2)
+                                        .foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                                }
+                                Spacer()
+                                Text(Fmt.bytes(e.bytes)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 1)
                         }
-                        Spacer()
-                        Text(Fmt.bytes(s.bytes)).monospacedDigit().foregroundStyle(.secondary)
-                        Button("Restore") { model.restore(s.id) }.buttonStyle(.bordered)
-                        Button("Delete") { model.purge(s.id) }.buttonStyle(.bordered).tint(.red)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(sessionLabel(s.id)).fontWeight(.medium)
+                                Text("\(s.count) item(s)").font(.caption).foregroundStyle(.tertiary)
+                            }
+                            Spacer()
+                            Text(Fmt.bytes(s.bytes)).monospacedDigit().foregroundStyle(.secondary)
+                            Button("Restore") { model.restore(s.id) }.buttonStyle(.bordered)
+                            Button("Delete") { model.purge(s.id) }.buttonStyle(.bordered).tint(.red)
+                        }
                     }
                     .padding(.vertical, 2)
                 }
@@ -91,6 +108,13 @@ struct QuarantineView: View {
         } message: {
             Text("This can't be undone. Restore anything you want to keep first.")
         }
+    }
+
+    /// Parent folder of an original path, ~-shortened.
+    private func relPath(_ path: String) -> String {
+        let dir = (path as NSString).deletingLastPathComponent
+        let home = NSHomeDirectory()
+        return dir.hasPrefix(home) ? "~" + dir.dropFirst(home.count) : dir
     }
 
     /// Turn a yyyyMMdd-HHmmss id into something friendlier.

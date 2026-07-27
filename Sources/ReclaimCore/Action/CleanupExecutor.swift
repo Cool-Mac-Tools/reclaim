@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// The outcome of attempting to act on one target.
 public struct ActionResult: Codable, Sendable {
@@ -85,6 +86,17 @@ public struct CleanupExecutor: Sendable {
         self.greenOnly = greenOnly
     }
 
+    /// Whether the current user can actually move/remove this path. Items owned
+    /// by root or another account (e.g. a cache created by `sudo npm`) can't be
+    /// touched without admin rights — no amount of Full Disk Access changes Unix
+    /// ownership. We detect this up front so it's an honest skip, not a silent
+    /// move that fails with EPERM and leaves the item sitting in the list.
+    public static func isRemovable(_ path: String) -> Bool {
+        var st = stat()
+        guard lstat(path, &st) == 0 else { return false }
+        return st.st_uid == getuid()
+    }
+
     public func run(_ targets: [CleanupTarget], sessionID: String,
                     now: Date = Date()) -> CleanupLedgerEntry {
         let freeBefore = VolumeProbe.dataVolume().free
@@ -111,6 +123,11 @@ public struct CleanupExecutor: Sendable {
             guard FileManager.default.isReadableFile(atPath: target.path) else {
                 results.append(.init(path: target.path, status: .skippedProtected, bytes: 0,
                                      detail: "Operation not permitted or missing — skipped, not forced."))
+                continue
+            }
+            guard Self.isRemovable(target.path) else {
+                results.append(.init(path: target.path, status: .skippedProtected, bytes: 0,
+                                     detail: "Owned by the system or another account — needs admin rights to remove."))
                 continue
             }
             do {

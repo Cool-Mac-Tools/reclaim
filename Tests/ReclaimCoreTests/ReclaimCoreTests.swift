@@ -304,6 +304,29 @@ import Foundation
     }
 }
 
+@Suite struct RemovabilityTests {
+    @Test func isRemovableReflectsOwnership() throws {
+        let fm = FileManager.default
+        let f = fm.temporaryDirectory.appendingPathComponent("rm-\(UUID().uuidString).txt")
+        try "x".write(to: f, atomically: true, encoding: .utf8)
+        defer { try? fm.removeItem(at: f) }
+        #expect(CleanupExecutor.isRemovable(f.path))          // we own this one
+        // Root-owned system file: present, but not ours → not removable.
+        #expect(!CleanupExecutor.isRemovable("/System/Library/CoreServices/SystemVersion.plist"))
+        #expect(!CleanupExecutor.isRemovable("/does-not-exist-\(UUID().uuidString)"))
+    }
+
+    @Test func executorSkipsUnownedTargets() {
+        // A root-owned path must be skipped (not a silent failure), never quarantined.
+        let entry = CleanupExecutor(greenOnly: false).run(
+            [CleanupTarget(path: "/System/Library/CoreServices/SystemVersion.plist",
+                           riskTier: .green, source: "t")],
+            sessionID: "ownership-test")
+        #expect(entry.results.first?.status == .skippedProtected)
+        #expect(entry.quarantinedBytes == 0)
+    }
+}
+
 @Suite struct DuplicateFinderTests {
     @Test func groupsIdenticalFilesAndComputesReclaimable() throws {
         let fm = FileManager.default
