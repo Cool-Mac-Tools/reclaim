@@ -52,6 +52,7 @@ struct CategoryBrowser: View {
     @State private var sort: Sort = .largest
     @State private var sizeFilter: SizeFilter = .any
     @State private var ageFilter: AgeFilter = .any
+    @State private var aiRequest: AppModel.AIRequest?   // this sheet presents its own AI popup
 
     enum Sort: String, CaseIterable, Identifiable {
         case largest = "Largest", oldest = "Oldest", newest = "Newest"
@@ -115,6 +116,9 @@ struct CategoryBrowser: View {
             footer
         }
         .frame(minWidth: 600, minHeight: 580)
+        .sheet(item: $aiRequest) { req in
+            AIExplainSheet(request: req).environmentObject(ai)
+        }
     }
 
     private var header: some View {
@@ -188,7 +192,7 @@ struct CategoryBrowser: View {
             }
             Spacer()
             Text(Fmt.bytes(file.bytes)).monospacedDigit().foregroundStyle(.secondary)
-            if ai.isReady { AISparkButton { model.explainFile(file, category: drill.name) } }
+            if ai.isReady { AISparkButton { aiRequest = AppModel.request(forFile: file, category: drill.name) } }
             if bundle {
                 Button {
                     NSWorkspace.shared.open(URL(fileURLWithPath: file.path))

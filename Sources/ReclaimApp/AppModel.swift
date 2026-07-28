@@ -88,21 +88,19 @@ final class AppModel: ObservableObject {
     /// When set, the AI explain popup is shown for this item.
     @Published var aiRequest: AIRequest?
 
-    func explainItem(_ item: CleanItem) {
-        aiRequest = AIRequest(title: item.name, system: AIPrompt.system,
+    func explainItem(_ item: CleanItem) { aiRequest = Self.request(forItem: item) }
+
+    // Pure builders — usable from views that present the AI sheet themselves
+    // (sheets can't trigger a sheet on the window behind them).
+    static func request(forItem item: CleanItem) -> AIRequest {
+        AIRequest(title: item.name, system: AIPrompt.system,
             user: AIPrompt.user(name: item.name, location: item.id, size: Fmt.bytes(item.bytes),
                                 tier: item.tier.plainLabel, detail: item.detail,
                                 impact: item.impact, recurrence: item.recurrence))
     }
-    func explainCategory(_ c: StorageCategory) {
-        aiRequest = AIRequest(title: c.name, system: AIPrompt.system,
-            user: AIPrompt.user(name: c.name, location: "A storage category on your Mac",
-                                size: Fmt.bytes(c.bytes), tier: "—", detail: c.detail,
-                                impact: "", recurrence: ""))
-    }
-    func explainFile(_ file: ClusterFile, category: String) {
+    static func request(forFile file: ClusterFile, category: String) -> AIRequest {
         let name = (file.path as NSString).lastPathComponent
-        aiRequest = AIRequest(title: name, system: AIPrompt.system,
+        return AIRequest(title: name, system: AIPrompt.system,
             user: AIPrompt.user(name: name, location: file.path, size: Fmt.bytes(file.bytes),
                                 tier: category, detail: "", impact: "", recurrence: ""))
     }
