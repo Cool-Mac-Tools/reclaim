@@ -5,6 +5,7 @@ import ReclaimCore
 /// clean with one click.
 struct ScanView: View {
     @EnvironmentObject var model: AppModel
+    @State private var pendingCLI: SupportedCLI.Command?
 
     var body: some View {
         Group {
@@ -25,6 +26,17 @@ struct ScanView: View {
         }
         .sheet(item: $model.openCluster) { cluster in
             ClusterDetailView(cluster: cluster).environmentObject(model)
+        }
+        .confirmationDialog("Run this cleanup command?",
+            isPresented: Binding(get: { pendingCLI != nil },
+                                 set: { if !$0 { pendingCLI = nil } }),
+            presenting: pendingCLI) { cmd in
+            Button("Run  \(cmd.invocation)", role: .destructive) {
+                model.runCLI(cmd); pendingCLI = nil
+            }
+            Button("Cancel", role: .cancel) { pendingCLI = nil }
+        } message: { cmd in
+            Text("Reclaim will run:\n\(cmd.invocation)\n\nThis uses the tool's own cleanup — safe and supported, but not reversible from Reclaim's quarantine.")
         }
     }
 
@@ -78,6 +90,23 @@ struct ScanView: View {
                     Section {
                         ForEach(safe) { row($0) }
                     } header: { groupHeader("Safe to clean", "Regenerable caches and leftovers from deleted apps. Pre-selected.", safe) }
+                }
+                if !model.cliItems.isEmpty {
+                    Section {
+                        ForEach(model.cliItems) { cliRow($0) }
+                    } header: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text("Clean with the tool's own command").font(.headline)
+                                Spacer()
+                                Text(Fmt.bytes(model.cliItems.reduce(0) { $0 + $1.bytes }))
+                                    .foregroundStyle(.secondary).monospacedDigit()
+                            }
+                            Text("Caches cleaned by their own tool (npm, brew…) — the safe, supported way. Not reversible via quarantine.")
+                                .font(.caption).foregroundStyle(.secondary).textCase(nil)
+                        }
+                        .padding(.vertical, 2)
+                    }
                 }
                 if !model.clusters.isEmpty {
                     Section {
@@ -159,6 +188,21 @@ struct ScanView: View {
         CleanRow(item: item,
                  isOn: Binding(get: { model.selected.contains(item.id) },
                                set: { model.toggle(item.id, $0) }))
+    }
+
+    private func cliRow(_ item: AppModel.CLIItem) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "terminal").foregroundStyle(.tint).frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.name).fontWeight(.medium).lineLimit(1)
+                Text(item.command.invocation).font(.caption.monospaced()).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(Fmt.bytes(item.bytes)).monospacedDigit().foregroundStyle(.secondary)
+            Button("Clean") { pendingCLI = item.command }
+                .buttonStyle(.bordered).disabled(model.busy != nil)
+        }
+        .padding(.vertical, 2)
     }
 
     private func clusterRow(_ c: Cluster) -> some View {

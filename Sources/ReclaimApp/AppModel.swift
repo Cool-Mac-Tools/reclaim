@@ -34,6 +34,8 @@ final class AppModel: ObservableObject {
     @Published var review: JudgmentReport?
     @Published var freeBytes: Int64 = 0
     @Published var totalBytes: Int64 = 0
+    /// Tool binaries found on this Mac (npm, brew…) — gates the CLI cleanups.
+    @Published var availableTools: Set<String> = []
 
     // "My Mac" whole-disk storage map (read-only overview of everything).
     @Published var mapping = false
@@ -125,9 +127,17 @@ final class AppModel: ObservableObject {
             async let orph = Self.doOrphans()
             async let rev  = Self.doReview()
             let (s, o, r) = await (scan, orph, rev)
+            // Which tool commands are actually usable — resolved via the login
+            // shell so nvm/pyenv/Homebrew paths are found.
+            let neededTools = Set(s.findings
+                .filter { $0.action == .supportedCLI }
+                .compactMap { SupportedCLI.command(for: $0.recipeID)?.tool })
+            let avail = await Task.detached { SupportedCLI.availableTools(among: neededTools) }.value
+
             self.scanReport = s
             self.orphans = o
             self.review = r
+            self.availableTools = avail
             self.freeBytes = s.volumeFreeBytes
             self.totalBytes = s.volumeTotalBytes
             self.selected = Set(self.items.filter(\.safe).map(\.id))
@@ -181,6 +191,10 @@ final class AppModel: ObservableObject {
         var out: [CleanItem] = []
 
         for f in scanReport?.findings ?? [] {
+            // Findings with a usable tool command are handled in the CLI section,
+            // not by quarantine — skip them here.
+            if f.action == .supportedCLI, let cmd = SupportedCLI.command(for: f.recipeID),
+               availableTools.contains(cmd.tool) { continue }
             // Can we actually remove it? Root/other-owned items (e.g. a cache
             // made by `sudo npm`) can't be touched without admin — mark them
             // non-selectable with a clear reason instead of failing silently.
@@ -210,6 +224,38 @@ final class AppModel: ObservableObject {
         var seen = Set<String>()
         return out.filter { seen.insert($0.id).inserted }
                   .sorted { ($0.safe ? 1 : 0, $0.bytes) > ($1.safe ? 1 : 0, $1.bytes) }
+    }
+
+    /// Tool-command cleanups available this scan (npm/brew/…), one per finding
+    /// whose recipe prefers its tool's own cleanup and whose tool is installed.
+    struct CLIItem: Identifiable {
+        let id: String; let name: String; let bytes: Int64; let command: SupportedCLI.Command
+    }
+    var cliItems: [CLIItem] {
+        (scanReport?.findings ?? []).compactMap { f in
+            guard f.action == .supportedCLI,
+                  let cmd = SupportedCLI.command(for: f.recipeID),
+                  availableTools.contains(cmd.tool) else { return nil }
+            return CLIItem(id: cmd.recipeID, name: f.displayName, bytes: f.allocatedBytes, command: cmd)
+        }
+    }
+
+    /// Run a tool's own cleanup command (irreversible — not quarantine).
+    func runCLI(_ command: SupportedCLI.Command) {
+        guard busy == nil else { return }
+        busy = "Running \(command.invocation)…"
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                SupportedCLI.run(command)
+            }.value
+            self.busy = nil
+            if result.succeeded {
+                self.actionAlert = "Ran `\(command.invocation)`.\nFreed \(Fmt.bytes(result.freedBytes))."
+            } else {
+                self.actionAlert = "`\(command.invocation)` didn't finish cleanly:\n\(result.output)"
+            }
+            self.runEverything()
+        }
     }
 
     var safeReclaimBytes: Int64 { items.filter(\.safe).reduce(0) { $0 + $1.bytes } }
