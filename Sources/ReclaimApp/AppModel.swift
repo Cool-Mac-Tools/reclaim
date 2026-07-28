@@ -199,7 +199,11 @@ final class AppModel: ObservableObject {
             // made by `sudo npm`) can't be touched without admin — mark them
             // non-selectable with a clear reason instead of failing silently.
             let removable = CleanupExecutor.isRemovable(f.path)
-            let safe = f.riskTier == .green && !f.blockingAppRunning && removable
+            // Pre-select both Green (regenerable) and Blue (reversible/
+            // re-downloadable) — both are safe and undoable via quarantine.
+            // Yellow (history) and Orange (personal) stay review-only.
+            let safe = (f.riskTier == .green || f.riskTier == .blue)
+                     && !f.blockingAppRunning && removable
             let selectable = f.riskTier != .red && !f.blockingAppRunning && removable
             let note = !removable ? "Owned by the system or another account — needs admin rights to remove. "
                      : f.blockingAppRunning ? "Quit the owning app first — then this can be cleaned. "
@@ -325,6 +329,34 @@ final class AppModel: ObservableObject {
 
     func toggle(_ id: String, _ on: Bool) {
         if on { selected.insert(id) } else { selected.remove(id) }
+    }
+
+    /// Quit the app(s) blocking an item, then clean it — removing the "quit the
+    /// app and rescan" friction. Graceful termination (the app can still prompt
+    /// to save). Then the item is no longer blocked and moves to quarantine.
+    func quitAndClean(_ item: CleanItem) {
+        guard !item.blockingApps.isEmpty, busy == nil else { return }
+        busy = "Quitting \(item.blockingApps.joined(separator: ", "))…"
+        Task {
+            await Self.quitApps(item.blockingApps)
+            self.busy = nil
+            self.reclaim([CleanupTarget(path: item.id, riskTier: item.tier, source: item.source)])
+        }
+    }
+
+    /// Gracefully quit running apps by display name and wait (briefly) for them
+    /// to actually exit.
+    private static func quitApps(_ names: [String]) async {
+        let ws = NSWorkspace.shared
+        func matches(_ app: NSRunningApplication) -> Bool {
+            let n = app.localizedName ?? ""
+            return names.contains { n == $0 || n.localizedCaseInsensitiveContains($0) }
+        }
+        ws.runningApplications.filter(matches).forEach { $0.terminate() }
+        for _ in 0..<25 {   // up to ~5s
+            if !ws.runningApplications.contains(where: matches) { break }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
     }
 
     // Media browser: which cluster's files are being browsed in the sheet.

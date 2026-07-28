@@ -89,7 +89,7 @@ struct ScanView: View {
                 if !safe.isEmpty {
                     Section {
                         ForEach(safe) { row($0) }
-                    } header: { groupHeader("Safe to clean", "Regenerable caches and leftovers from deleted apps. Pre-selected.", safe) }
+                    } header: { groupHeader("Safe to clean", "Regenerable caches, re-downloadable data, and leftovers from deleted apps — all reversible. Pre-selected.", safe) }
                 }
                 if !model.cliItems.isEmpty {
                     Section {
@@ -228,6 +228,7 @@ struct ScanView: View {
 }
 
 struct CleanRow: View {
+    @EnvironmentObject var model: AppModel
     let item: AppModel.CleanItem
     @Binding var isOn: Bool
     @State private var expanded = false
@@ -260,8 +261,16 @@ struct CleanRow: View {
                     }
                     Text(item.id).font(.caption.monospaced()).foregroundStyle(.tertiary).textSelection(.enabled)
                 }
-                Button(expanded ? "Less" : "Why?") { expanded.toggle() }
-                    .buttonStyle(.link).font(.caption)
+                HStack(spacing: 14) {
+                    Button(expanded ? "Less" : "Why?") { expanded.toggle() }
+                        .buttonStyle(.link).font(.caption)
+                    if !item.selectable && !item.blockingApps.isEmpty {
+                        Button("Quit \(item.blockingApps.joined(separator: " & ")) & Clean") {
+                            model.quitAndClean(item)
+                        }
+                        .buttonStyle(.link).font(.caption).disabled(model.busy != nil)
+                    }
+                }
             }
         }
         .padding(.vertical, 2)
