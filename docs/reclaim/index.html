@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Reclaim — explainable, app-aware storage cleanup for Mac. See what your tools left behind, understand every finding, remove it safely to a reversible quarantine, and prove the space you got back.">
+  <title>Reclaim — Understand every gigabyte on your Mac</title>
+  <link rel="icon" type="image/png" sizes="48x48" href="../assets/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="../css/styles.css?v=20260728">
+</head>
+<body class="product-page">
+
+  <nav class="subnav" aria-label="Reclaim">
+    <div class="subnav-inner">
+      <a class="subnav-title" href="../index.html">Reclaim</a>
+      <ul class="subnav-links">
+        <li><a href="#overview" class="active">Overview</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#ai">AI</a></li>
+        <li><a href="#safety">Safety</a></li>
+        <li><a href="#download">Download</a></li>
+        <li><a href="#github">GitHub</a></li>
+      </ul>
+      <a class="subnav-cta" href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Get Reclaim</a>
+      <button class="nav-menu-button" type="button" data-menu-toggle
+              aria-expanded="false" aria-controls="product-mobile-menu" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="mobile-nav" id="product-mobile-menu" data-mobile-menu>
+        <a href="../index.html">Home</a>
+        <a href="#overview">Overview</a>
+        <a href="#features">Features</a>
+        <a href="#ai">AI</a>
+        <a href="#safety">Safety</a>
+        <a href="#download">Download</a>
+        <a href="https://github.com/Claytonwendel/reclaim">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero hero-light" id="overview">
+    <h1 class="headline-hero">Reclaim</h1>
+    <p class="subhead">Understand every gigabyte on your Mac.</p>
+    <div class="cta-row">
+      <a class="link-more" href="#features">Learn more</a>
+      <a class="link-more" style="color:#0071e3" href="#download">Download</a>
+    </div>
+    <div class="hero-visual">
+      <div class="scan-mock fade-in" aria-hidden="true" style="max-width:520px;width:100%">
+        <div class="scan-mock-bar"><i></i><i></i><i></i><span>Reclaim — Scan complete · 2.6s</span></div>
+        <div class="scan-summary">
+          <div class="scan-card"><div class="label">Recoverable now</div><div class="value green">18.4 GB</div></div>
+          <div class="scan-card"><div class="label">Review for more</div><div class="value amber">31.2 GB</div></div>
+          <div class="scan-card"><div class="label">Free space</div><div class="value blue">90 GB</div></div>
+        </div>
+        <div class="scan-rows">
+          <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Xcode DerivedData &amp; previews</span><span class="size">13.0 GB</span></div>
+          <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">npm &amp; Docker caches</span><span class="size">9.2 GB</span></div>
+          <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Leftovers from uninstalled apps</span><span class="size">4.1 GB</span></div>
+          <div class="scan-row"><span class="tier-dot tier-yellow"></span><span class="name">Cursor chat history · won't reopen if removed</span><span class="size">12.4 GB</span></div>
+          <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Old Messages attachments · iCloud-synced</span><span class="size">2.4 GB</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature tabs -->
+  <section class="feature-tabs-section" id="features" data-tabs>
+    <div class="feature-tabs-header fade-in">
+      <h2 class="headline-section">Get to know Reclaim.</h2>
+    </div>
+    <ul class="tab-list" role="tablist">
+      <li><button type="button" class="active" data-tab-button="scan" role="tab">Scan</button></li>
+      <li><button type="button" data-tab-button="mymac" role="tab">My Mac</button></li>
+      <li><button type="button" data-tab-button="orphans" role="tab">Orphans</button></li>
+      <li><button type="button" data-tab-button="duplicates" role="tab">Duplicates</button></li>
+      <li><button type="button" data-tab-button="review" role="tab">Review</button></li>
+      <li><button type="button" data-tab-button="quarantine" role="tab">Quarantine</button></li>
+      <li><button type="button" data-tab-button="history" role="tab">History</button></li>
+      <li><button type="button" data-tab-button="proven" role="tab">Proof</button></li>
+      <li><button type="button" data-tab-button="more" role="tab">More</button></li>
+    </ul>
+
+    <div class="tab-panel active fade-in" data-tab-panel="scan" id="scan">
+      <div class="tab-panel-copy">
+        <h2>One scan.<br>Your whole toolchain.</h2>
+        <p>Reclaim recognizes what more than 80 apps and developer tools leave behind — Cursor, Xcode, npm, Docker, Homebrew, Ollama, Adobe, browsers and many more — then explains each finding in plain language: what it is, why it's there, what deletion changes, and whether it comes back.</p>
+        <h3>Explain before acting.</h3>
+        <p>No black-box "one-click cleaner." Every finding carries a rationale and a confidence level, so you always know why something is safe before you remove it.</p>
+        <a class="link-more" style="color:#0071e3" href="#download">Download Reclaim</a>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:440px;width:100%">
+          <div class="scan-mock-bar"><i></i><i></i><i></i><span>Xcode Preview Data</span></div>
+          <div style="padding:20px 22px">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
+              <span class="tier-dot tier-green"></span>
+              <strong style="font-size:17px">13.0 GB · Safe to rebuild</strong>
+            </div>
+            <p style="font-size:14px;color:#6e6e73;line-height:1.5;margin:0">Generated SwiftUI previews from past sessions. Xcode isn't running. Deleting this won't touch source code, archives, or signing profiles. Previews rebuild when you use them again.</p>
+            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+              <span class="chip active" style="padding:6px 13px">Quarantine (reversible)</span>
+              <span class="chip" style="padding:6px 13px">Why is this here?</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="mymac" id="mymac">
+      <div class="tab-panel-copy">
+        <p class="eyebrow">My Mac</p>
+        <h2>See where every<br>gigabyte actually went.</h2>
+        <p>Reclaim walks your whole data volume and reconciles it — exactly — to the real used space macOS reports. Categories drill in to a full browser where you can filter by size and age, bulk-select, and remove straight to quarantine.</p>
+        <h3>Even "System Data," explained.</h3>
+        <p>That opaque bucket gets itemized into Protected Data, macOS System, System Update Files, Virtual Memory, and residual snapshots — so nothing is a mystery. Big bundles like Photo libraries and apps stay whole, never carved up.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
+          <div class="scan-rows" style="padding:16px 12px">
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Applications</span><span class="size">42.1 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Photos library</span><span class="size">28.7 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Developer &amp; caches</span><span class="size">19.3 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-red"></span><span class="name">macOS System &amp; Snapshots</span><span class="size">24.0 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Documents &amp; Downloads</span><span class="size">11.2 GB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="orphans" id="orphans">
+      <div class="tab-panel-copy">
+        <h2>Leftovers from apps<br>you already deleted.</h2>
+        <p>Uninstalling an app rarely removes everything. Reclaim cross-references what's installed against the data on disk and surfaces the caches, application support, and preferences left behind by apps that are long gone.</p>
+        <h3>Careful by default.</h3>
+        <p>A system-bundle allowlist keeps macOS's own components off the list, and anything still owned by a live recipe is excluded — so you only see genuinely dead data.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
+          <div class="scan-rows" style="padding:16px 12px">
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Microsoft Office leftovers</span><span class="size">257 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Adobe Photoshop data</span><span class="size">293 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Slack leftovers</span><span class="size">52 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="duplicates" id="duplicates">
+      <div class="tab-panel-copy">
+        <p class="eyebrow">Duplicate finder</p>
+        <h2>The same file,<br>saved five times.</h2>
+        <p>Reclaim groups files by size, then confirms true duplicates with a sampled SHA-256 hash — so it's fast and it's certain. It keeps the newest copy and offers the rest for removal.</p>
+        <h3>Scoped to your stuff.</h3>
+        <p>Duplicate detection is limited to personal categories — photos, movies, music, documents, downloads — so it never offers up the identical files your dev toolchains legitimately keep.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
+          <div class="scan-rows" style="padding:16px 12px">
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">IMG_4821.HEIC · 3 copies</span><span class="size">14 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">presentation-final.key · 2 copies</span><span class="size">88 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">export.mp4 · 2 copies</span><span class="size">612 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="review" id="review">
+      <div class="tab-panel-copy">
+        <h2>"You might not<br>need these."</h2>
+        <p>Beyond the toolchain, Reclaim gently flags personal wins: clusters of files piling up in one place, screen recordings and screenshots gone stale, old-and-large downloads, and installers for apps you already installed.</p>
+        <h3>Suggestions, never actions.</h3>
+        <p>Everything here is personal, so it's sorted and toned — never auto-removed. Reclaim explains the pattern and its confidence, and leaves the decision entirely to you.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
+          <div class="scan-rows" style="padding:16px 12px">
+            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">44 videos in Downloads</span><span class="size">581 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Screen recording · 480 days old</span><span class="size">1.2 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Installer for an app you have</span><span class="size">720 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="quarantine" id="quarantine">
+      <div class="tab-panel-copy">
+        <h2>Nothing is deleted.<br>It's quarantined.</h2>
+        <p>When you clean, items don't vanish — they move to a reversible vault on your Mac with a manifest for one-click restore. Undo anytime, or purge when you're sure. Reclaim honors macOS: it skips anything protected or in use rather than forcing it.</p>
+        <h3>Celebrate the win.</h3>
+        <p>Empty the quarantine and Reclaim shows a shareable card — "Woohoo! You freed 18.4 GB" — ready to send.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock scan-mock-dark" aria-hidden="true" style="max-width:420px;width:100%;background:rgba(40,40,42,0.9);border-color:rgba(255,255,255,0.1)">
+          <div style="padding:24px 22px;color:#f5f5f7">
+            <div style="font-size:15px;font-weight:600;margin-bottom:6px">Quarantined 18.4 GB · session 20260728</div>
+            <div style="font-size:13px;color:#a1a1a6;line-height:1.5">Nothing was deleted. Moved to a reversible vault. Restore anytime — or purge when you're sure.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="history" id="history">
+      <div class="tab-panel-copy">
+        <p class="eyebrow">History</p>
+        <h2>Watch your savings<br>add up.</h2>
+        <p>Every cleanup is recorded in an append-only ledger. See your lifetime space reclaimed, what you freed this month, a chart of recent sessions, and a full per-session log you can look back through.</p>
+        <h3>Proof you can revisit.</h3>
+        <p>No guessing whether it "did anything" — the numbers are always there.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
+          <div style="padding:22px">
+            <div style="font-size:34px;font-weight:700;letter-spacing:-0.03em;color:#1a9d47">142 GB</div>
+            <div style="font-size:13px;color:#6e6e73;margin-top:6px;line-height:1.5">reclaimed lifetime · 23 GB this month across 6 cleanups</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="proven" id="proven">
+      <div class="tab-panel-copy">
+        <h2>See the space you<br>actually got back.</h2>
+        <p>Reclaim doesn't just say "done." After a cleanup it rescans and measures the real free-space delta, then reports exactly how much you recovered and how many items moved — with zero errors, or it tells you why.</p>
+        <h3>Honest about snapshots.</h3>
+        <p>If APFS local snapshots are briefly pinning freed blocks, Reclaim explains the lag instead of pretending it failed. The space arrives as the snapshots age out.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
+          <div style="padding:22px">
+            <div style="font-size:34px;font-weight:700;letter-spacing:-0.03em;color:#1a9d47">+18.4 GB free</div>
+            <div style="font-size:13px;color:#6e6e73;margin-top:6px;line-height:1.5">Verified by a rescan. 11 items removed, 0 errors. No projects or personal photos touched.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel more-panel" data-tab-panel="more">
+      <div class="more-panel-heading">
+        <p class="eyebrow">More built in</p>
+        <h2>Safe by construction.</h2>
+        <p>Reclaim prefers the tool's own supported cleanup over raw deletion, gets apps out of the way first, and verifies the result — so cleaning is boring, which is exactly what you want.</p>
+      </div>
+      <div class="benefit-grid" aria-label="More Reclaim capabilities">
+        <div><strong>Supported removal</strong><span>Uses npm, brew, pip &amp; more where it can.</span></div>
+        <div><strong>Quit &amp; clean</strong><span>Closes an app first, then clears its cache.</span></div>
+        <div><strong>Read-only scans</strong><span>A scan never changes your Mac.</span></div>
+        <div><strong>Private by design</strong><span>No account, no cloud, no tracking.</span></div>
+      </div>
+      <div class="coming-soon">
+        <span class="coming-soon-label">Available now</span>
+        <h3>Free &amp; open source.</h3>
+        <p>Every feature is free, the source is public, and the builds are notarized by Apple. Growth tracking and a menu-bar watcher are on the roadmap.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI mode -->
+  <section class="showcase-section" id="ai" aria-labelledby="ai-title">
+    <div class="showcase-header fade-in">
+      <p class="eyebrow">New · AI explanations</p>
+      <h2 class="headline-section" id="ai-title">Not sure about a file?<br>Just ask.</h2>
+    </div>
+    <div class="showcase-stack">
+      <article class="showcase-card fade-in">
+        <div class="showcase-copy">
+          <p class="eyebrow">One button, plain answers</p>
+          <h3>"What is this,<br>and can I delete it?"</h3>
+          <p>Connect an AI provider and a ✨ button appears next to items in Scan and My Mac. Click it and Reclaim explains what a finding is and whether it's safe to remove — grounded in the real details of that item, never inventing a deletion.</p>
+        </div>
+        <div class="scan-mock" aria-hidden="true" style="width:100%">
+          <div class="scan-mock-bar"><i></i><i></i><i></i><span>✨ Ask Reclaim</span></div>
+          <div style="padding:20px 22px">
+            <p style="font-size:14px;color:#6e6e73;line-height:1.55;margin:0"><strong style="color:#1d1d1f">com.spotify.client · 3.4 GB.</strong> This is Spotify's offline-song and image cache. Spotify is still installed, so it will simply re-download what you play again. Safe to clear — it won't touch your playlists or account.</p>
+          </div>
+        </div>
+      </article>
+      <article class="showcase-card fade-in">
+        <div class="showcase-copy">
+          <p class="eyebrow">Bring your own key</p>
+          <h3>Your AI.<br>Your model. Your bill.</h3>
+          <p>Use your own OpenAI, Anthropic, or Google key and pick any model — from cheapest-and-fastest to most capable. Your key is stored in the macOS Keychain and requests go straight to the provider you chose. Nothing runs through us, and it's completely optional.</p>
+        </div>
+        <div class="scan-mock" aria-hidden="true" style="width:100%">
+          <div style="padding:22px;display:flex;gap:8px;flex-wrap:wrap">
+            <span class="chip active" style="padding:8px 15px">Anthropic — Claude</span>
+            <span class="chip" style="padding:8px 15px">OpenAI — GPT</span>
+            <span class="chip" style="padding:8px 15px">Google — Gemini</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Safety / trust -->
+  <section class="stat-band" id="safety">
+    <p class="eyebrow" style="color:#0071e3">Trust is the product</p>
+    <h2 class="headline-section">Built to protect what matters.</h2>
+    <p class="subhead subhead-light" style="max-width:640px;margin:12px auto 0">Reclaim scans read-only, prefers each tool's own supported removal method, and stops cold at anything macOS protects. Every finding lands in one of five clearly-labeled tiers.</p>
+
+    <div class="tier-legend">
+      <div class="tier-legend-item">
+        <div class="head"><span class="tier-dot tier-green"></span><h4>Green — Regenerable</h4></div>
+        <p>Caches, previews, staging. One-click, after checking the app is closed.</p>
+      </div>
+      <div class="tier-legend-item">
+        <div class="head"><span class="tier-dot tier-blue"></span><h4>Blue — Reversible</h4></div>
+        <p>Re-downloadable data and app leftovers. Quarantined with an undo window.</p>
+      </div>
+      <div class="tier-legend-item">
+        <div class="head"><span class="tier-dot tier-yellow"></span><h4>Yellow — History</h4></div>
+        <p>Chat history, sessions, logs. Explained, then only removed if you choose.</p>
+      </div>
+      <div class="tier-legend-item">
+        <div class="head"><span class="tier-dot tier-orange"></span><h4>Orange — Personal</h4></div>
+        <p>Photos, messages, cloud-synced files. Never auto-deleted. Ever.</p>
+      </div>
+      <div class="tier-legend-item">
+        <div class="head"><span class="tier-dot tier-red"></span><h4>Red — Protected</h4></div>
+        <p>System data and sealed assets. Reclaim reports them and leaves them alone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lineup: what Reclaim understands -->
+  <section class="lineup-section" id="lineup">
+    <div class="lineup-header fade-in">
+      <h2 class="headline-section">It knows your toolchain.</h2>
+      <p class="subhead">80+ versioned recipes, and growing — grouped by what makes the mess.</p>
+    </div>
+    <div class="lineup-grid fade-in">
+      <div class="lineup-card">
+        <h3>Developer tools</h3>
+        <p>Xcode &amp; simulators, VS Code, Cursor, JetBrains, CocoaPods, Gradle.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Package managers</h3>
+        <p>npm · npx, pip · conda, Homebrew, NuGet, and their global caches.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Language runtimes</h3>
+        <p>Go, Rust, Flutter, Unity — build artifacts and module caches.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Virtualization</h3>
+        <p>Docker, OrbStack, Parallels, VMware — images and sparse disks.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>AI &amp; ML</h3>
+        <p>Ollama models, Hugging Face, pip wheels — the quietly huge ones.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Browsers</h3>
+        <p>Chrome, Safari, and Chromium caches and service-worker storage.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Creative &amp; media</h3>
+        <p>Adobe caches &amp; Camera Raw, Spotify, Podcasts, Mail downloads.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Comms &amp; system</h3>
+        <p>Slack, Discord, Messages attachments, logs, installers, .ipsw files.</p>
+      </div>
+      <div class="lineup-card">
+        <h3>Orphans &amp; duplicates</h3>
+        <p>Leftovers from uninstalled apps and true byte-for-byte duplicates.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why Reclaim -->
+  <section class="explore-section" id="why">
+    <div class="explore-header fade-in">
+      <h2 class="headline-section">Why Reclaim?</h2>
+      <p class="subhead">Other cleaners guess and delete.<br>Reclaim explains, then lets you decide.</p>
+    </div>
+    <div class="bento-grid fade-in">
+      <div class="bento-item wide">
+        <h3>Not another black-box cleaner.</h3>
+        <p>The old apps show a spinning dial and a scary number, then delete things you can't see. Reclaim shows you every finding, tells you what it is and whether it comes back, and never acts until you say so.</p>
+      </div>
+      <div class="bento-item">
+        <h3>App-aware, not path-aware.</h3>
+        <p>Reclaim knows the difference between a rebuildable cache and your actual work — because it understands the tool that made it.</p>
+      </div>
+      <div class="bento-item">
+        <h3>Reversible by default.</h3>
+        <p>Everything goes to a quarantine you can undo. You purge only when you're sure.</p>
+      </div>
+      <div class="bento-item">
+        <h3>It proves the space.</h3>
+        <p>A rescan after every cleanup measures the real free-space delta — no imaginary gigabytes.</p>
+        <div class="feature-pills" aria-label="Reclaim safety features">
+          <span>Read-only</span>
+          <span>5 tiers</span>
+          <span>Quarantine</span>
+          <span>Verified</span>
+        </div>
+      </div>
+      <div class="bento-item">
+        <h3>Built for Apple Silicon.</h3>
+        <p>Native SwiftUI, Developer ID signed and notarized by Apple, no third-party analytics, source public on GitHub.</p>
+        <div class="cta-row" style="justify-content:flex-start;margin-top:16px">
+          <a class="link-more" style="color:#0071e3" href="https://github.com/Claytonwendel/reclaim">How it works on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download -->
+  <section class="download-band fade-in" id="download">
+    <h2 class="headline-section">Get Reclaim for Mac.</h2>
+    <p class="subhead subhead-light">Free · Open source · Native · Notarized by Apple · Apple Silicon</p>
+    <div class="cta-row">
+      <a class="btn-download" href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download for Mac</a>
+      <a class="link-more" style="color:#0071e3" href="https://github.com/Claytonwendel/reclaim/releases/latest">Release notes on GitHub</a>
+    </div>
+    <p class="body-copy" style="margin-top:14px">
+      Every feature is free. Prefer to build it yourself? The
+      <a href="#github">full source code is public</a>.
+    </p>
+    <ol class="download-steps">
+      <li><span class="step-copy"><strong>Download &amp; open.</strong> Drag Reclaim to Applications and launch it — notarized by Apple, no warnings.</span></li>
+      <li><span class="step-copy"><strong>Run a free scan.</strong> Read-only. Reclaim never changes anything until you say so.</span></li>
+      <li><span class="step-copy"><strong>See every finding explained</strong> — what it is, whether it's safe, and how much you'll get back.</span></li>
+      <li><span class="step-copy"><strong>Recover with one click.</strong> Items go to a reversible quarantine, then a rescan proves the space.</span></li>
+    </ol>
+  </section>
+
+  <!-- GitHub -->
+  <section class="github-band fade-in" id="github">
+    <h2 class="headline-section">Open on GitHub.</h2>
+    <p class="body-copy">Reclaim's source is public — Swift and SwiftUI, one deterministic engine behind the app. Read exactly what each recipe does before you trust it, or build it yourself.</p>
+    <div class="cta-row">
+      <a class="btn-outline" href="https://github.com/Claytonwendel/reclaim">View on GitHub</a>
+      <a class="link-more" style="color:#0071e3" href="https://github.com/Claytonwendel/reclaim/releases/latest">Latest release</a>
+      <a class="link-more" style="color:#0071e3" href="https://github.com/Claytonwendel/reclaim/blob/main/README.md">Docs on GitHub</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <p class="footer-note">Reclaim requires macOS 14 or later, Apple Silicon. Scans work read-only; deeper scanning (Messages, containers) uses Full Disk Access, which you grant explicitly.</p>
+      <div class="footer-columns">
+        <div class="footer-col">
+          <h4>Reclaim</h4>
+          <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#ai">AI</a></li>
+            <li><a href="#download">Download</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>What it finds</h4>
+          <ul>
+            <li><a href="#scan">Developer caches</a></li>
+            <li><a href="#orphans">App leftovers</a></li>
+            <li><a href="#duplicates">Duplicates</a></li>
+            <li><a href="#review">Personal review</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Safety</h4>
+          <ul>
+            <li><a href="#safety">Risk tiers</a></li>
+            <li><a href="#quarantine">Reversible quarantine</a></li>
+            <li><a href="#proven">Verified results</a></li>
+            <li><a href="/legal/privacy">Privacy</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>GitHub</h4>
+          <ul>
+            <li><a href="https://github.com/Claytonwendel/reclaim">Repository</a></li>
+            <li><a href="https://github.com/Claytonwendel/reclaim/releases">Releases</a></li>
+            <li><a href="https://github.com/Claytonwendel/reclaim/blob/main/README.md">Documentation</a></li>
+            <li><a href="https://github.com/Claytonwendel/reclaim/issues">Support</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>About</h4>
+          <ul>
+            <li><a href="#why">Why Reclaim</a></li>
+            <li><a href="#safety">The trust model</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Copyright © 2026 Reclaim. All rights reserved.</span>
+        <div class="footer-legal">
+          <a href="https://github.com/Claytonwendel/reclaim">GitHub</a>
+          <a href="/legal/terms">Terms</a>
+          <a href="/legal/refunds">Refunds</a>
+          <a href="/legal/privacy">Privacy</a>
+          <a href="#download">Download</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../js/main.js?v=20260728"></script>
+</body>
+</html>

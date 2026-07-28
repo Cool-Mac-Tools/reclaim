@@ -7,7 +7,7 @@
   <title>Reclaim — Understand every gigabyte on your Mac</title>
   <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/styles.css?v=20260721">
+  <link rel="stylesheet" href="css/styles.css?v=20260728">
   <meta property="og:title" content="Reclaim — Understand every gigabyte on your Mac">
   <meta property="og:description" content="An explainable storage copilot for people who build on a Mac. Finds what your tools left behind, explains what's safe to remove, and recovers the space with one click.">
   <meta property="og:image" content="assets/reclaim-icon.png">
@@ -21,22 +21,26 @@
         Reclaim
       </a>
       <ul class="globalnav-links">
-        <li><a href="#features">Features</a></li>
+        <li><a href="reclaim/index.html">Reclaim</a></li>
+        <li><a href="reclaim/index.html#features">Features</a></li>
+        <li><a href="reclaim/index.html#ai">AI</a></li>
         <li><a href="#safety">Safety</a></li>
         <li><a href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download</a></li>
         <li><a href="https://github.com/Claytonwendel/reclaim">GitHub</a></li>
       </ul>
       <div class="globalnav-actions">
-        <a href="#safety">Safety</a>
+        <a href="https://github.com/Claytonwendel/reclaim">GitHub</a>
         <a href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download</a>
       </div>
       <button class="nav-menu-button" type="button" data-menu-toggle
               aria-expanded="false" aria-controls="home-mobile-menu" aria-label="Open menu">
         <span></span><span></span><span></span>
       </button>
-      <a class="globalnav-mobile-cta" href="#download">Download</a>
+      <a class="globalnav-mobile-cta" href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download</a>
       <div class="mobile-nav" id="home-mobile-menu" data-mobile-menu>
-        <a href="#features">Features</a>
+        <a href="reclaim/index.html">Reclaim</a>
+        <a href="reclaim/index.html#features">Features</a>
+        <a href="reclaim/index.html#ai">AI</a>
         <a href="#safety">Safety</a>
         <a href="https://github.com/Claytonwendel/reclaim">GitHub</a>
         <a href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download</a>
@@ -51,7 +55,7 @@
       <p class="subhead">Your Mac is not full. Your tools are messy.</p>
       <div class="cta-row">
         <a class="btn-download" href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download for Mac</a>
-        <a class="link-more" style="color:#0071e3" href="#features">See how it works</a>
+        <a class="link-more" style="color:#0071e3" href="reclaim/index.html">See how it works</a>
       </div>
       <div class="tile-visual" style="align-items:center">
         <!-- Live-looking scan dashboard mock (swap for a real screenshot later) -->
@@ -72,6 +76,48 @@
         </div>
       </div>
     </div>
+
+    <!-- AI feature -->
+    <a class="tile tile-full tile-feature-combined" href="reclaim/index.html#ai">
+      <div class="tile-feature-copy">
+        <p class="eyebrow">New · AI explanations</p>
+        <h2 class="headline-tile">Not sure?<br>Just ask.</h2>
+        <p class="subhead">Connect your own OpenAI, Claude, or Gemini key and a ✨ button appears next to any finding. Click it to ask "what is this, and is it safe to delete?" — grounded in the real details, never inventing a deletion. Your key, your bill, straight to the provider.</p>
+        <div class="cta-row">
+          <span class="link-more" style="color:#0071e3">Explore AI explanations</span>
+        </div>
+      </div>
+      <div class="tile-feature-visual">
+        <div class="scan-mock" style="max-width:440px;width:100%" aria-hidden="true">
+          <div class="scan-mock-bar"><i></i><i></i><i></i><span>✨ Ask Reclaim</span></div>
+          <div style="padding:20px 22px">
+            <p style="font-size:14px;color:#6e6e73;line-height:1.55;margin:0"><strong style="color:#1d1d1f">com.spotify.client · 3.4 GB.</strong> Spotify's offline-song &amp; image cache. Spotify is still installed, so it re-downloads what you play. Safe to clear — won't touch playlists or your account.</p>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <!-- My Mac feature -->
+    <a class="tile tile-full tile-feature-combined" href="reclaim/index.html#mymac">
+      <div class="tile-feature-copy">
+        <p class="eyebrow">My Mac</p>
+        <h2 class="headline-tile">Every gigabyte,<br>accounted for.</h2>
+        <p class="subhead">Reclaim walks your whole data volume and reconciles it exactly to the space macOS reports — then even itemizes the opaque "System Data" bucket. Drill in, filter by size and age, and remove straight to a reversible quarantine.</p>
+        <div class="cta-row">
+          <span class="link-more" style="color:#0071e3">Explore My Mac</span>
+        </div>
+      </div>
+      <div class="tile-feature-visual">
+        <div class="scan-mock" style="max-width:440px;width:100%" aria-hidden="true">
+          <div class="scan-rows" style="padding:16px 12px">
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Applications</span><span class="size">42.1 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Photos library</span><span class="size">28.7 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Developer &amp; caches</span><span class="size">19.3 GB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-red"></span><span class="name">macOS System &amp; Snapshots</span><span class="size">24.0 GB</span></div>
+          </div>
+        </div>
+      </div>
+    </a>
 
     <!-- Capability rail -->
     <div class="filter-highlight" id="features">
@@ -103,7 +149,7 @@
     </div>
 
     <!-- Explain feature -->
-    <a class="tile tile-full tile-feature-combined" href="#features">
+    <a class="tile tile-full tile-feature-combined" href="reclaim/index.html#scan">
       <div class="tile-feature-copy">
         <p class="eyebrow">Explain before acting</p>
         <h2 class="headline-tile">Every gigabyte,<br>explained.</h2>
@@ -130,7 +176,7 @@
       </div>
     </a>
 
-    <a class="tile tile-light" href="#safety">
+    <a class="tile tile-light" href="reclaim/index.html#orphans">
       <h2 class="headline-tile">Orphans</h2>
       <p class="subhead">Leftovers from apps<br>you already deleted.</p>
       <div class="cta-row"><span class="link-more">Learn more</span></div>
@@ -145,7 +191,7 @@
       </div>
     </a>
 
-    <a class="tile tile-gradient" href="#safety">
+    <a class="tile tile-gradient" href="reclaim/index.html#review">
       <h2 class="headline-tile">Review</h2>
       <p class="subhead">"We think you might not<br>need these."</p>
       <div class="cta-row"><span class="link-more">Learn more</span></div>
@@ -160,7 +206,7 @@
       </div>
     </a>
 
-    <a class="tile tile-dark" href="#safety">
+    <a class="tile tile-dark" href="reclaim/index.html#quarantine">
       <h2 class="headline-tile">Reversible</h2>
       <p class="subhead subhead-light">Everything goes to a<br>quarantine you can undo.</p>
       <div class="cta-row"><span class="link-more" style="color:#2997ff">Learn more</span></div>
@@ -174,7 +220,36 @@
       </div>
     </a>
 
-    <a class="tile tile-light" href="#safety">
+    <a class="tile tile-light" href="reclaim/index.html#duplicates">
+      <h2 class="headline-tile">Duplicates</h2>
+      <p class="subhead">The same file,<br>saved five times.</p>
+      <div class="cta-row"><span class="link-more">Learn more</span></div>
+      <div class="tile-visual" style="align-items:center">
+        <div class="scan-mock" style="max-width:400px" aria-hidden="true">
+          <div class="scan-rows" style="padding:14px 10px">
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">IMG_4821.HEIC · 3 copies</span><span class="size">14 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">export.mp4 · 2 copies</span><span class="size">612 MB</span></div>
+            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">deck-final.key · 2 copies</span><span class="size">88 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <a class="tile tile-gradient" href="reclaim/index.html#history">
+      <h2 class="headline-tile">History</h2>
+      <p class="subhead">Watch your savings<br>add up over time.</p>
+      <div class="cta-row"><span class="link-more">Learn more</span></div>
+      <div class="tile-visual" style="align-items:center">
+        <div class="scan-mock" style="max-width:400px" aria-hidden="true">
+          <div style="padding:22px">
+            <div style="font-size:34px;font-weight:700;letter-spacing:-0.03em;color:#1a9d47">142 GB</div>
+            <div style="font-size:13px;color:#6e6e73;margin-top:6px;line-height:1.5">reclaimed lifetime · 23 GB this month across 6 cleanups, all logged.</div>
+          </div>
+        </div>
+      </div>
+    </a>
+
+    <a class="tile tile-light" href="reclaim/index.html#proven">
       <h2 class="headline-tile">Proven</h2>
       <p class="subhead">See the space you<br>actually got back.</p>
       <div class="cta-row"><span class="link-more">Learn more</span></div>
@@ -224,7 +299,7 @@
     <p class="subhead subhead-light" style="max-width:600px;margin:12px auto 0">Reclaim was born from a live session that recovered 90+ GB — without deleting a single source file, photo, or piece of app history.</p>
     <div class="stat-grid">
       <div><div class="n">90+ GB</div><div class="k">verified recovered</div></div>
-      <div><div class="n">68</div><div class="k">cleanup recipes and growing</div></div>
+      <div><div class="n">80+</div><div class="k">cleanup recipes and growing</div></div>
       <div><div class="n">0</div><div class="k">source files or photos lost</div></div>
     </div>
   </section>
@@ -235,7 +310,7 @@
     <p class="subhead subhead-light" id="pricing">Free · Open source · Native · Notarized by Apple · Apple Silicon</p>
     <div class="cta-row">
       <a class="btn-download" href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download for Mac</a>
-      <a class="link-more" style="color:#2997ff" href="https://github.com/Claytonwendel/reclaim">View source on GitHub</a>
+      <a class="link-more" style="color:#0071e3" href="https://github.com/Claytonwendel/reclaim">View source on GitHub</a>
     </div>
     <ol class="download-steps">
       <li><div class="step-copy"><strong>Download &amp; open.</strong> Drag Reclaim to Applications and launch it — notarized by Apple, no warnings.</div></li>
@@ -252,8 +327,9 @@
         <div class="footer-col">
           <h4>Reclaim</h4>
           <ul>
-            <li><a href="#features">Overview</a></li>
-            <li><a href="#features">Features</a></li>
+            <li><a href="reclaim/index.html">Overview</a></li>
+            <li><a href="reclaim/index.html#features">Features</a></li>
+            <li><a href="reclaim/index.html#ai">AI</a></li>
             <li><a href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download</a></li>
             <li><a href="https://github.com/Claytonwendel/reclaim">GitHub</a></li>
           </ul>
@@ -261,19 +337,19 @@
         <div class="footer-col">
           <h4>What it finds</h4>
           <ul>
-            <li><a href="#features">Developer caches</a></li>
-            <li><a href="#safety">App leftovers</a></li>
-            <li><a href="#safety">Duplicates &amp; large files</a></li>
-            <li><a href="#safety">Personal review</a></li>
+            <li><a href="reclaim/index.html#scan">Developer caches</a></li>
+            <li><a href="reclaim/index.html#orphans">App leftovers</a></li>
+            <li><a href="reclaim/index.html#duplicates">Duplicates</a></li>
+            <li><a href="reclaim/index.html#review">Personal review</a></li>
           </ul>
         </div>
         <div class="footer-col">
           <h4>Safety</h4>
           <ul>
             <li><a href="#safety">Risk tiers</a></li>
-            <li><a href="#safety">Reversible quarantine</a></li>
-            <li><a href="#safety">Read-only scanning</a></li>
-            <li><a href="#safety">Privacy</a></li>
+            <li><a href="reclaim/index.html#quarantine">Reversible quarantine</a></li>
+            <li><a href="reclaim/index.html#proven">Verified results</a></li>
+            <li><a href="/legal/privacy">Privacy</a></li>
           </ul>
         </div>
         <div class="footer-col">
@@ -282,12 +358,13 @@
             <li><a href="#download">Get started</a></li>
             <li><a href="/legal/privacy">Privacy Policy</a></li>
             <li><a href="/legal/terms">Terms</a></li>
+            <li><a href="/legal/refunds">Refunds</a></li>
           </ul>
         </div>
         <div class="footer-col">
           <h4>About</h4>
           <ul>
-            <li><a href="#safety">Why Reclaim</a></li>
+            <li><a href="reclaim/index.html#why">Why Reclaim</a></li>
             <li><a href="#safety">The trust model</a></li>
           </ul>
         </div>
@@ -295,7 +372,9 @@
       <div class="footer-bottom">
         <span>Copyright © 2026 Reclaim. All rights reserved.</span>
         <div class="footer-legal">
+          <a href="https://github.com/Claytonwendel/reclaim">GitHub</a>
           <a href="/legal/terms">Terms</a>
+          <a href="/legal/refunds">Refunds</a>
           <a href="/legal/privacy">Privacy</a>
           <a href="https://github.com/Claytonwendel/reclaim/releases/latest/download/Reclaim.dmg">Download</a>
         </div>
@@ -303,6 +382,6 @@
     </div>
   </footer>
 
-  <script src="js/main.js?v=20260721"></script>
+  <script src="js/main.js?v=20260728"></script>
 </body>
 </html>

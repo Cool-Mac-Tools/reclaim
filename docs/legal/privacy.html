@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Reclaim</title>
+  <link rel="icon" href="../assets/favicon.png">
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; color: #1d1d1f;
+           margin: 0; background: #fff; }
+    .legal { max-width: 680px; margin: 0 auto; padding: 64px 24px 96px;
+             line-height: 1.6; font-size: 16px; }
+    h1 { font-size: 34px; margin-bottom: 4px; letter-spacing: -0.02em; }
+    .updated { color: #6e6e73; font-size: 14px; margin-bottom: 36px; }
+    h2 { font-size: 21px; margin-top: 36px; }
+    a { color: #0066cc; text-decoration: none; }
+    code { background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px;
+           font-size: 14px; }
+    .legal-nav { margin-bottom: 28px; font-size: 14px; }
+    .legal-nav a { margin-right: 16px; }
+  </style>
+</head>
+<body>
+  <div class="legal">
+    <nav class="legal-nav">
+      <a href="/">← Reclaim</a>
+      <a href="/legal/terms">Terms</a>
+      <a href="/legal/refunds">Refunds</a>
+      <a href="/legal/privacy">Privacy</a>
+    </nav>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: July 28, 2026</p>
+
+    <h2>The short version</h2>
+    <p>Reclaim runs entirely <strong>on your Mac</strong>. It scans your disk
+    read-only to find storage you can recover, and everything it learns about
+    your files stays on your device. Reclaim has no account, no cloud, no
+    analytics, and no tracking. Nothing about your files, folders, or storage
+    is ever uploaded to us — because there is no "us" server for it to go to.</p>
+
+    <h2>What the app sends over the network</h2>
+    <p>By default, Reclaim makes only one kind of network request, and it
+    contains no personal data:</p>
+    <p><strong>Update checks.</strong> Reclaim checks GitHub for a newer
+    release and downloads updates from there. These requests carry no
+    information about your files, your disk, or your device.</p>
+
+    <h2>Optional AI explanations (bring your own key)</h2>
+    <p>Reclaim includes an optional feature that can explain a finding in plain
+    language — "what is this, and is it safe to delete?" It is <strong>off
+    unless you turn it on</strong> by adding your own API key from OpenAI,
+    Anthropic, or Google.</p>
+    <p>When you do:</p>
+    <p><strong>Your key stays on your Mac.</strong> It is stored locally in the
+    macOS Keychain and is never sent to us.</p>
+    <p><strong>Requests go straight to the provider you chose.</strong> When
+    you click the ✨ button on a specific item, Reclaim sends details about
+    <em>that item</em> (such as its name, path, size, type, and safety tier)
+    and your question directly to your chosen provider, authenticated with your
+    key. That exchange is governed by that provider's privacy policy
+    (<a href="https://openai.com/policies/privacy-policy">OpenAI</a>,
+    <a href="https://www.anthropic.com/legal/privacy">Anthropic</a>, or
+    <a href="https://policies.google.com/privacy">Google</a>). Reclaim never
+    routes these requests through a server of ours, and we never see your key,
+    your questions, or the responses.</p>
+    <p>If you never add a key, this feature simply stays dormant and no such
+    requests are ever made.</p>
+
+    <h2>Your files and what Reclaim removes</h2>
+    <p>When you choose to clean something, Reclaim moves it to a reversible
+    quarantine on your own Mac (under <code>~/.reclaim/quarantine</code>) rather
+    than deleting it outright, so you can restore it until you purge. All of
+    this happens locally. No file content, and no list of what you cleaned, is
+    ever transmitted anywhere.</p>
+
+    <h2>macOS permissions</h2>
+    <p>Basic scanning works with no special access. Deeper scanning — for
+    example Messages attachments or app containers — uses macOS Full Disk
+    Access, which you grant (and can revoke) yourself in System Settings →
+    Privacy &amp; Security. Reclaim explains exactly when it's needed and takes
+    you to the right pane. It is entirely optional.</p>
+
+    <h2>This website</h2>
+    <p>reclaimac.com is a static site served by Cloudflare. It sets no cookies
+    and runs no analytics.</p>
+
+    <h2>Contact</h2>
+    <p><a href="mailto:support@reclaimac.com">support@reclaimac.com</a></p>
+  </div>
+</body>
+</html>
