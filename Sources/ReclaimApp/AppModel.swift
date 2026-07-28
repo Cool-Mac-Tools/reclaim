@@ -104,6 +104,12 @@ final class AppModel: ObservableObject {
             user: AIPrompt.user(name: name, location: file.path, size: Fmt.bytes(file.bytes),
                                 tier: category, detail: "", impact: "", recurrence: ""))
     }
+    static func request(forNode node: FileNode, category: String) -> AIRequest {
+        AIRequest(title: node.name, system: AIPrompt.system,
+            user: AIPrompt.user(name: node.name, location: node.path, size: Fmt.bytes(node.bytes),
+                                tier: category, detail: node.isDirectory ? "A folder." : "",
+                                impact: "", recurrence: ""))
+    }
 
     /// A single row in the unified results list, from any source.
     struct CleanItem: Identifiable, Sendable {
@@ -118,6 +124,21 @@ final class AppModel: ObservableObject {
         var blockingApps: [String] = []  // running apps that block this item
         var impact: String = ""          // what deletion changes / re-downloads
         var recurrence: String = ""      // whether it grows back
+        var isDirectory: Bool = false    // can be expanded to reveal contents
+    }
+
+    /// A child target discovered by expanding a folder — registered so the
+    /// clean action can act on individually-selected parts.
+    struct SelTarget { let target: CleanupTarget; let bytes: Int64 }
+    @Published var extraTargets: [String: SelTarget] = [:]
+
+    /// Record the removable children revealed when a folder is expanded, so
+    /// selecting them feeds the same clean flow as top-level items.
+    func registerNodes(_ nodes: [FileNode], tier: RiskTier, source: String) {
+        for n in nodes where CleanupExecutor.isRemovable(n.path) && !MacStorageMap.isAtomicBundle(n.path) {
+            extraTargets[n.path] = SelTarget(
+                target: CleanupTarget(path: n.path, riskTier: tier, source: source), bytes: n.bytes)
+        }
     }
 
     // MARK: - Full Disk Access
@@ -147,7 +168,7 @@ final class AppModel: ObservableObject {
         mapMac()
         scanning = true
         hasScanned = false
-        scanReport = nil; orphans = []; review = nil; selected = []
+        scanReport = nil; orphans = []; review = nil; selected = []; extraTargets = [:]
 
         Task {
             async let scan = Self.doScan()
@@ -238,7 +259,8 @@ final class AppModel: ObservableObject {
             out.append(CleanItem(id: f.path, name: f.displayName, detail: note + f.explanation,
                                  bytes: f.allocatedBytes, tier: f.riskTier, source: f.recipeID,
                                  selectable: selectable, safe: safe, blockingApps: f.blockingApps,
-                                 impact: f.impact, recurrence: f.recurrence))
+                                 impact: f.impact, recurrence: f.recurrence,
+                                 isDirectory: DirLister.isDirectory(f.path)))
         }
         for o in orphans where o.confidence == .likelyOrphan {
             out.append(CleanItem(id: o.path, name: "Leftover: \(o.folderName)",
@@ -294,7 +316,14 @@ final class AppModel: ObservableObject {
     /// app is currently using (blocked, but still reclaimable once it quits).
     /// Only truly protected (Red) items are excluded.
     var reviewBytes: Int64 { items.filter { !$0.safe && $0.tier != .red }.reduce(0) { $0 + $1.bytes } }
-    var selectedBytes: Int64 { items.filter { selected.contains($0.id) }.reduce(0) { $0 + $1.bytes } }
+    var selectedBytes: Int64 {
+        var total = items.filter { selected.contains($0.id) }.reduce(0) { $0 + $1.bytes }
+        let itemIDs = Set(items.map(\.id))
+        for (path, st) in extraTargets where selected.contains(path) && !itemIDs.contains(path) {
+            total += st.bytes
+        }
+        return total
+    }
 
     /// Accumulation clusters are multi-file personal pile-ups — shown as
     /// insight, not one-click cleanable (each file needs its own look).
@@ -303,8 +332,12 @@ final class AppModel: ObservableObject {
     // MARK: - Clean
 
     func cleanSelected() {
-        let chosen = items.filter { selected.contains($0.id) && $0.selectable }
-        reclaim(chosen.map { CleanupTarget(path: $0.id, riskTier: $0.tier, source: $0.source) })
+        var targets = items.filter { selected.contains($0.id) && $0.selectable }
+            .map { CleanupTarget(path: $0.id, riskTier: $0.tier, source: $0.source) }
+        // Include individually-selected expanded children.
+        for (path, st) in extraTargets where selected.contains(path) { targets.append(st.target) }
+        var seen = Set<String>()
+        reclaim(targets.filter { seen.insert($0.path).inserted })
     }
 
     /// The shared clean pipeline used by the main list and the media browser.

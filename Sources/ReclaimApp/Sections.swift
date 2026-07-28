@@ -233,6 +233,9 @@ struct CleanRow: View {
     let item: AppModel.CleanItem
     @Binding var isOn: Bool
     @State private var expanded = false
+    @State private var foldersOpen = false
+    @State private var children: [FileNode]?
+    @State private var loadingFolder = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -250,6 +253,11 @@ struct CleanRow: View {
                     Spacer()
                     Text(Fmt.bytes(item.bytes)).monospacedDigit().foregroundStyle(.secondary)
                     if ai.isReady { AISparkButton { model.explainItem(item) } }
+                    if item.isDirectory {
+                        Button { toggleFolder() } label: {
+                            Image(systemName: foldersOpen ? "chevron.down" : "chevron.right").font(.caption)
+                        }.buttonStyle(.borderless).help("Expand to see and clean what's inside")
+                    }
                 }
                 if expanded {
                     Text(item.detail).font(.callout).foregroundStyle(.secondary)
@@ -273,8 +281,39 @@ struct CleanRow: View {
                         .buttonStyle(.link).font(.caption).disabled(model.busy != nil)
                     }
                 }
+                if foldersOpen { folderContents }
             }
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder private var folderContents: some View {
+        if loadingFolder {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Reading folder…").font(.caption).foregroundStyle(.secondary)
+            }.padding(.leading, 4).padding(.top, 2)
+        } else if let children {
+            if children.isEmpty {
+                Text("Empty").font(.caption).foregroundStyle(.tertiary)
+            } else {
+                ExpandableNodeRows(nodes: children, depth: 0, tier: item.tier, source: item.source,
+                                   selected: $model.selected,
+                                   register: { model.registerNodes($0, tier: item.tier, source: item.source) },
+                                   aiRequest: $model.aiRequest)
+            }
+        }
+    }
+
+    private func toggleFolder() {
+        foldersOpen.toggle()
+        guard foldersOpen, children == nil else { return }
+        loadingFolder = true
+        Task {
+            let kids = await Task.detached(priority: .userInitiated) { DirLister.children(of: item.id) }.value
+            model.registerNodes(kids, tier: item.tier, source: item.source)
+            children = kids
+            loadingFolder = false
+        }
     }
 }

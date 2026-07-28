@@ -75,10 +75,13 @@ struct CategoryBrowser: View {
         drill.files.filter { selected.contains($0.path) }.reduce(0) { $0 + $1.bytes }
     }
     private func isBundle(_ f: ClusterFile) -> Bool { MacStorageMap.isAtomicBundle(f.path) }
-    /// Only non-bundle files in an actionable category can be selected.
-    private var selectableFiltered: [ClusterFile] {
-        drill.actionable ? filtered.filter { !isBundle($0) } : []
+    /// Removable = not a library/app bundle and owned by this user. Gated
+    /// per-file (any category), so everything a user can safely delete is
+    /// deletable; system/other-owned files stay locked with a clear reason.
+    private func removable(_ f: ClusterFile) -> Bool {
+        !isBundle(f) && CleanupExecutor.isRemovable(f.path)
     }
+    private var selectableFiltered: [ClusterFile] { filtered.filter(removable) }
     private var allFilteredSelected: Bool {
         !selectableFiltered.isEmpty && selectableFiltered.allSatisfy { selected.contains($0.path) }
     }
@@ -174,7 +177,7 @@ struct CategoryBrowser: View {
     @ViewBuilder private func row(_ file: ClusterFile) -> some View {
         let bundle = isBundle(file)
         HStack(spacing: 12) {
-            if drill.actionable && !bundle {
+            if removable(file) {
                 Toggle("", isOn: Binding(
                     get: { selected.contains(file.path) },
                     set: { on in if on { selected.insert(file.path) } else { selected.remove(file.path) } }))
@@ -182,6 +185,9 @@ struct CategoryBrowser: View {
             } else if bundle {
                 Image(systemName: "shippingbox").foregroundStyle(.secondary).frame(width: 16)
                     .help("A bundle (library or app) — open to manage; never removed piece by piece")
+            } else {
+                Image(systemName: "lock").foregroundStyle(.tertiary).frame(width: 16)
+                    .help("Owned by the system or another account — needs admin rights to remove")
             }
             ThumbView(path: file.path)
             VStack(alignment: .leading, spacing: 2) {
@@ -213,31 +219,23 @@ struct CategoryBrowser: View {
         return "\(d.formatted(date: .abbreviated, time: .omitted)) · \(days) days ago"
     }
 
-    @ViewBuilder private var footer: some View {
-        if drill.actionable {
-            HStack {
-                Text("\(selected.count) selected · \(Fmt.bytes(selectedBytes))")
-                    .font(.callout).foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    let targets = drill.files
-                        .filter { selected.contains($0.path) && !isBundle($0) }
-                        .map { CleanupTarget(path: $0.path, riskTier: drill.tier, source: "my-mac") }
-                    model.reclaim(targets)
-                    dismiss()
-                } label: {
-                    Text("Send \(Fmt.bytes(selectedBytes)) to Quarantine").frame(minWidth: 190)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(selected.isEmpty || model.busy != nil)
+    private var footer: some View {
+        HStack {
+            Text("\(selected.count) selected · \(Fmt.bytes(selectedBytes))")
+                .font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                let targets = drill.files
+                    .filter { selected.contains($0.path) && removable($0) }
+                    .map { CleanupTarget(path: $0.path, riskTier: drill.tier, source: "my-mac") }
+                model.reclaim(targets)
+                dismiss()
+            } label: {
+                Text("Send \(Fmt.bytes(selectedBytes)) to Quarantine").frame(minWidth: 190)
             }
-            .padding(14)
-        } else {
-            Label("View only — this is system or other-user data. Reclaim won't remove it. "
-                + "Use the Reclaim tab for safe cleanups here.", systemImage: "lock.shield")
-                .font(.caption).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
+            .buttonStyle(.borderedProminent)
+            .disabled(selected.isEmpty || model.busy != nil)
         }
+        .padding(14)
     }
 }
