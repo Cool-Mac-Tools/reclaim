@@ -44,6 +44,7 @@ struct MyMacDrill: Identifiable {
 /// media browser, generalized to any category.
 struct CategoryBrowser: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var ai: AISettings
     @Environment(\.dismiss) private var dismiss
     let drill: MyMacDrill
 
@@ -187,6 +188,7 @@ struct CategoryBrowser: View {
             }
             Spacer()
             Text(Fmt.bytes(file.bytes)).monospacedDigit().foregroundStyle(.secondary)
+            if ai.isReady { AISparkButton { model.explainFile(file, category: drill.name) } }
             if bundle {
                 Button {
                     NSWorkspace.shared.open(URL(fileURLWithPath: file.path))

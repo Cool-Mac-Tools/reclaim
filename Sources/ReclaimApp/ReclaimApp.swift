@@ -10,11 +10,13 @@ import ReclaimCore
 struct ReclaimApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var model = AppModel()
+    @StateObject private var ai = AISettings.shared
 
     var body: some Scene {
         WindowGroup("Reclaim") {
             RootView()
                 .environmentObject(model)
+                .environmentObject(ai)
                 .frame(minWidth: 940, minHeight: 620)
         }
         .windowStyle(.titleBar)

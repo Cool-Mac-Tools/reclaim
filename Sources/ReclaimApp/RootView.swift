@@ -33,6 +33,9 @@ struct RootView: View {
         } message: {
             Text(model.actionAlert ?? "")
         }
+        .sheet(item: $model.aiRequest) { req in
+            AIExplainSheet(request: req).environmentObject(AISettings.shared)
+        }
         .task {
             model.loadQuarantine()
             model.refreshFDA()
@@ -50,6 +53,7 @@ struct RootView: View {
         case .myMac:      MyMacView()
         case .quarantine: QuarantineView()
         case .history:    HistoryView()
+        case .ai:         AIView()
         }
     }
 

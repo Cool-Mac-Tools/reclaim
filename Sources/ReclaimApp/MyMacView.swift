@@ -123,7 +123,7 @@ struct MyMacView: View {
             if scanningNow { refreshingChip }
         }
         .sheet(item: $drill) { d in
-            CategoryBrowser(drill: d).environmentObject(model)
+            CategoryBrowser(drill: d).environmentObject(model).environmentObject(AISettings.shared)
         }
         .sheet(isPresented: $showDuplicates) {
             DuplicatesView(groups: model.mapReport?.duplicates ?? []).environmentObject(model)

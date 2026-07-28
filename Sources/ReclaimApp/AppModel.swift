@@ -13,6 +13,7 @@ final class AppModel: ObservableObject {
         case myMac      = "My Mac"
         case quarantine = "Quarantine"
         case history    = "History"
+        case ai         = "AI"
         var id: String { rawValue }
         var symbol: String {
             switch self {
@@ -20,6 +21,7 @@ final class AppModel: ObservableObject {
             case .myMac:      "internaldrive"
             case .quarantine: "arrow.uturn.backward.circle"
             case .history:    "chart.bar.xaxis"
+            case .ai:         "sparkles"
             }
         }
     }
@@ -77,6 +79,33 @@ final class AppModel: ObservableObject {
     /// One-shot message shown after a reclaim/restore so outcomes (and skips)
     /// are never silent.
     @Published var actionAlert: String?
+
+    // MARK: - AI explain
+
+    struct AIRequest: Identifiable {
+        let id = UUID(); let title: String; let system: String; let user: String
+    }
+    /// When set, the AI explain popup is shown for this item.
+    @Published var aiRequest: AIRequest?
+
+    func explainItem(_ item: CleanItem) {
+        aiRequest = AIRequest(title: item.name, system: AIPrompt.system,
+            user: AIPrompt.user(name: item.name, location: item.id, size: Fmt.bytes(item.bytes),
+                                tier: item.tier.plainLabel, detail: item.detail,
+                                impact: item.impact, recurrence: item.recurrence))
+    }
+    func explainCategory(_ c: StorageCategory) {
+        aiRequest = AIRequest(title: c.name, system: AIPrompt.system,
+            user: AIPrompt.user(name: c.name, location: "A storage category on your Mac",
+                                size: Fmt.bytes(c.bytes), tier: "—", detail: c.detail,
+                                impact: "", recurrence: ""))
+    }
+    func explainFile(_ file: ClusterFile, category: String) {
+        let name = (file.path as NSString).lastPathComponent
+        aiRequest = AIRequest(title: name, system: AIPrompt.system,
+            user: AIPrompt.user(name: name, location: file.path, size: Fmt.bytes(file.bytes),
+                                tier: category, detail: "", impact: "", recurrence: ""))
+    }
 
     /// A single row in the unified results list, from any source.
     struct CleanItem: Identifiable, Sendable {

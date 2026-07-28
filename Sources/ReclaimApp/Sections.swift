@@ -229,6 +229,7 @@ struct ScanView: View {
 
 struct CleanRow: View {
     @EnvironmentObject var model: AppModel
+    @EnvironmentObject var ai: AISettings
     let item: AppModel.CleanItem
     @Binding var isOn: Bool
     @State private var expanded = false
@@ -248,6 +249,7 @@ struct CleanRow: View {
                     ForEach(item.blockingApps, id: \.self) { AppChip(name: $0) }
                     Spacer()
                     Text(Fmt.bytes(item.bytes)).monospacedDigit().foregroundStyle(.secondary)
+                    if ai.isReady { AISparkButton { model.explainItem(item) } }
                 }
                 if expanded {
                     Text(item.detail).font(.callout).foregroundStyle(.secondary)
