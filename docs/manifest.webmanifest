@@ -1,0 +1,12 @@
+{
+  "name": "Reclaim",
+  "short_name": "Reclaim",
+  "description": "Understand every gigabyte on your Mac and clear what's safe to remove.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "/assets/reclaim-icon.png", "sizes": "500x500", "type": "image/png" }
+  ]
+}
