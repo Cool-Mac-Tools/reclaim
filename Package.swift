@@ -12,7 +12,8 @@ let package = Package(
     targets: [
         .target(name: "ReclaimCore"),
         .executableTarget(name: "reclaim-cli", dependencies: ["ReclaimCore"]),
-        .executableTarget(name: "ReclaimApp", dependencies: ["ReclaimCore"]),
+        .executableTarget(name: "ReclaimApp", dependencies: ["ReclaimCore"],
+                          linkerSettings: [.linkedFramework("Photos")]),
         .testTarget(name: "ReclaimCoreTests", dependencies: ["ReclaimCore"]),
     ],
     swiftLanguageModes: [.v6]

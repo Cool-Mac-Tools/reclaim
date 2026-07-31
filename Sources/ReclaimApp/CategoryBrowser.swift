@@ -53,6 +53,7 @@ struct CategoryBrowser: View {
     @State private var sizeFilter: SizeFilter = .any
     @State private var ageFilter: AgeFilter = .any
     @State private var aiRequest: AppModel.AIRequest?   // this sheet presents its own AI popup
+    @State private var showPhotoBrowser = false         // PhotoKit asset-level browser
 
     enum Sort: String, CaseIterable, Identifiable {
         case largest = "Largest", oldest = "Oldest", newest = "Newest"
@@ -94,6 +95,7 @@ struct CategoryBrowser: View {
         VStack(spacing: 0) {
             header
             filterBar
+            if drill.id == "media" { photoLibraryBanner }
             if notShownBytes > 50 * 1024 * 1024 {
                 Label("\(Fmt.bytes(notShownBytes)) more isn't listed here — files under 1 MB and "
                     + "protected bundle contents (like your Photos library or app internals), which "
@@ -124,6 +126,28 @@ struct CategoryBrowser: View {
         }
     }
 
+    /// The bridge from the opaque `.photoslibrary` bundle to real, per-asset
+    /// detail: the filesystem walk can only see the bundle as one blob, so this
+    /// hands off to the PhotoKit browser to list individual photos and videos.
+    private var photoLibraryBanner: some View {
+        Button { showPhotoBrowser = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "photo.stack").font(.title3).foregroundStyle(.pink)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Browse Photos Library").fontWeight(.medium)
+                    Text("See individual photos & videos with real sizes — and clear the big ones.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color.pink.opacity(0.08))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: drill.symbol).font(.title3).foregroundStyle(categoryColor(drill.id))
@@ -139,6 +163,11 @@ struct CategoryBrowser: View {
             Button("Done") { dismiss() }
         }
         .padding(14)
+        // Hosted here (not on the root VStack) so it doesn't collide with the
+        // AI-explain sheet — SwiftUI honors only one .sheet per view.
+        .sheet(isPresented: $showPhotoBrowser) {
+            PhotoLibraryBrowser().environmentObject(model)
+        }
     }
 
     private var filterBar: some View {
@@ -199,6 +228,10 @@ struct CategoryBrowser: View {
             Spacer()
             Text(Fmt.bytes(file.bytes)).monospacedDigit().foregroundStyle(.secondary)
             if ai.isReady { AISparkButton { aiRequest = AppModel.request(forFile: file, category: drill.name) } }
+            if file.path.hasSuffix(".photoslibrary") {
+                Button { showPhotoBrowser = true } label: { Image(systemName: "photo.stack") }
+                    .buttonStyle(.borderless).help("Browse individual photos & videos")
+            }
             if bundle {
                 Button {
                     NSWorkspace.shared.open(URL(fileURLWithPath: file.path))

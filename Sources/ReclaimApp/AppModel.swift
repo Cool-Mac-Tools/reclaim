@@ -422,6 +422,87 @@ final class AppModel: ObservableObject {
     // Media browser: which cluster's files are being browsed in the sheet.
     @Published var openCluster: Cluster?
 
+    // MARK: - Photos library (PhotoKit detail)
+
+    /// The last full library walk — largest assets plus library-wide totals.
+    /// Nil until the browser is first opened.
+    @Published var photoScan: PhotoLibrary.Scan?
+    @Published var photosLoading = false
+    @Published var photoProgress: (done: Int, total: Int) = (0, 0)
+    /// True when Photos access was refused — the browser shows how to grant it.
+    @Published var photoAuthDenied = false
+
+    var photoAssets: [PhotoLibrary.Asset] { photoScan?.assets ?? [] }
+
+    /// Read the Photos library via PhotoKit (off-main; may prompt for access on
+    /// first use). Cached after the first successful load unless `force`.
+    func loadPhotos(force: Bool = false) {
+        guard !photosLoading else { return }
+        if photoScan != nil && !force { return }
+        photosLoading = true
+        photoAuthDenied = false
+        photoProgress = (0, 0)
+        Task {
+            let scan = await Task.detached(priority: .userInitiated) { () -> PhotoLibrary.Scan in
+                PhotoLibrary.loadAssets(progress: { done, total in
+                    Task { @MainActor in self.photoProgress = (done, total) }
+                })
+            }.value
+            self.photoScan = scan
+            self.photosLoading = false
+            if scan.totalCount == 0 && !PhotoLibrary.isAuthorized {
+                self.photoAuthDenied = true
+            }
+        }
+    }
+
+    /// Move selected assets to Photos' Recently Deleted (recoverable 30 days).
+    /// macOS shows its own confirmation panel; we record the outcome honestly and
+    /// log it to the ledger so History and lifetime totals include it.
+    func deletePhotos(ids: Set<String>) {
+        guard !ids.isEmpty, busy == nil else { return }
+        let doomed = photoAssets.filter { ids.contains($0.id) }
+        guard !doomed.isEmpty else { return }
+        busy = "Removing \(doomed.count) item(s) from Photos…"
+        Task {
+            let outcome = await PhotoLibrary.delete(ids: Array(ids))
+            self.busy = nil
+            switch outcome {
+            case .deleted(let n):
+                let removed = Set(doomed.map(\.id))
+                self.photoScan?.assets.removeAll { removed.contains($0.id) }
+                let bytes = doomed.reduce(0) { $0 + $1.bytes }
+                self.photoScan?.totalBytes -= bytes
+                self.logPhotoDeletion(doomed)
+                self.actionAlert = "Moved \(n) item(s) — \(Fmt.bytes(bytes)) — to Photos → Recently Deleted."
+                    + "\nRecover them in Photos within 30 days; empty Recently Deleted to free the space now."
+                self.loadQuarantine()   // refresh lifetime reclaimed + History
+            case .cancelled:
+                self.actionAlert = "No changes made — the deletion was cancelled."
+            case .nothingFound:
+                self.actionAlert = "Those items are no longer in your library."
+            }
+        }
+    }
+
+    /// Record a photo removal in the same ledger as file cleanups, so the History
+    /// tab and lifetime-reclaimed total reflect it. Recently-Deleted holds the
+    /// bytes for 30 days, so free space doesn't move yet — recorded honestly
+    /// (freeBefore == freeAfter), same as staged quarantine.
+    private func logPhotoDeletion(_ assets: [PhotoLibrary.Asset]) {
+        let df = DateFormatter(); df.dateFormat = "yyyyMMdd-HHmmss"
+        let results = assets.map {
+            ActionResult(path: "Photos Library / \($0.filename)",
+                         status: .quarantined, bytes: $0.bytes,
+                         detail: "Moved to Photos → Recently Deleted (recoverable 30 days)")
+        }
+        let free = Volume.freeBytes()
+        let entry = CleanupLedgerEntry(
+            sessionID: "photos-" + df.string(from: Date()), startedAt: Date(),
+            results: results, freeBeforeBytes: free, freeAfterBytes: free, snapshotsPresent: 0)
+        try? LedgerStore().append(entry)
+    }
+
     // MARK: - Quarantine
 
     func loadQuarantine() {
