@@ -1514,3 +1514,16 @@ body.menu-open { overflow: hidden; }
 .stat-grid .n { font-size: clamp(40px, 6vw, 60px); font-weight: 700; letter-spacing:-0.03em;
   color: #1d1d1f; }
 .stat-grid .k { font-size: 15px; color: var(--apple-gray-dark); margin-top: 6px; }
+
+/* Shrink the scan-dashboard mock so it fits a phone screen cleanly */
+@media (max-width: 734px) {
+  .scan-summary { gap: 7px; padding: 12px; }
+  .scan-card { padding: 10px 11px; }
+  .scan-card .label { font-size: 10px; }
+  .scan-card .value { font-size: 17px; white-space: nowrap; }
+  .scan-mock-bar { padding: 10px 13px; }
+  .scan-mock-bar span { font-size: 11px; }
+  .scan-rows { padding: 2px 6px 10px; }
+  .scan-row { font-size: 12px; gap: 9px; padding: 8px 10px; }
+  .scan-row .size { font-size: 12px; }
+}

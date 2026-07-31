@@ -46,24 +46,11 @@
     is ever uploaded to us — because there is no "us" server for it to go to.</p>
 
     <h2>What the app sends over the network</h2>
-    <p>Aside from the optional AI feature below, Reclaim makes only two kinds of
-    network request, and neither contains any information about your files:</p>
+    <p>By default, Reclaim makes only one kind of network request, and it
+    contains no personal data:</p>
     <p><strong>Update checks.</strong> Reclaim checks GitHub for a newer
     release and downloads updates from there. These requests carry no
     information about your files, your disk, or your device.</p>
-    <p><strong>License validation.</strong> If you subscribe to unlock cleanup,
-    the app sends <em>only your license key</em> to
-    <code>license.coolmac.tools</code> to confirm your subscription is active.
-    No information about your files, your disk, or your scans is sent.</p>
-
-    <h2>Purchase data</h2>
-    <p>Subscribing happens inside the app via Stripe Checkout. Payments are
-    processed by <a href="https://stripe.com">Stripe</a>, which collects your
-    name, email, and payment details under
-    <a href="https://stripe.com/privacy">Stripe's privacy policy</a>. Our
-    license server stores your license key alongside your Stripe customer and
-    subscription reference and email, so we can look up your purchase for support
-    or key recovery. We never see your full card details.</p>
 
     <h2>Optional AI explanations (bring your own key)</h2>
     <p>Reclaim includes an optional feature that can explain a finding in plain
