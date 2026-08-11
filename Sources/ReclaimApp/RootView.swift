@@ -51,6 +51,7 @@ struct RootView: View {
         switch model.section {
         case .scan:       ScanView()
         case .myMac:      MyMacView()
+        case .activity:   ActivityView()
         case .quarantine: QuarantineView()
         case .history:    HistoryView()
         case .ai:         AIView()

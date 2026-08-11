@@ -426,6 +426,32 @@ import Foundation
     }
 }
 
+@Suite struct SystemMonitorTests {
+    @Test func sampleReadsRealSystemState() {
+        let h = SystemMonitor().sample()
+        // These must be readable without root on a Developer-ID app.
+        #expect(h.totalMemoryBytes > 0)
+        #expect(h.coreCount > 0)
+        #expect(h.totalDiskBytes > 0)
+        #expect(!h.processes.isEmpty)          // ps always sees something
+        #expect(h.usedMemoryBytes >= 0)
+    }
+
+    @Test func diagnoseAlwaysReturnsSortedNonEmpty() {
+        let mon = SystemMonitor()
+        let d = mon.diagnose(mon.sample())
+        #expect(!d.isEmpty)
+        // Sorted most-severe first.
+        #expect(zip(d, d.dropFirst()).allSatisfy { $0.severity >= $1.severity })
+    }
+
+    @Test func friendlyNameUsesAppBundle() {
+        #expect(SystemMonitor.friendlyName(
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome") == "Google Chrome")
+        #expect(SystemMonitor.friendlyName("/usr/sbin/bluetoothd") == "bluetoothd")
+    }
+}
+
 @Suite struct MacStorageMapTests {
     @Test func classifyRoutesHomeFolders() {
         let home = "/Users/x"

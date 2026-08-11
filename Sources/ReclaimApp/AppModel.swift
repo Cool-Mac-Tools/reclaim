@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
     enum Section: String, CaseIterable, Identifiable {
         case scan       = "Reclaim"
         case myMac      = "My Mac"
+        case activity   = "Activity"
         case quarantine = "Quarantine"
         case history    = "History"
         case ai         = "AI"
@@ -19,6 +20,7 @@ final class AppModel: ObservableObject {
             switch self {
             case .scan:       "arrow.clockwise"
             case .myMac:      "internaldrive"
+            case .activity:   "speedometer"
             case .quarantine: "arrow.uturn.backward.circle"
             case .history:    "chart.bar.xaxis"
             case .ai:         "sparkles"
