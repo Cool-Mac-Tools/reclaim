@@ -190,26 +190,55 @@ public struct JudgmentScanner: Sendable {
 
     private func duplicates(_ bySize: [Int64: [FileFacts]]) -> [Suggestion] {
         var out: [Suggestion] = []
-        for (_, group) in bySize where group.count > 1 {
-            // Same-size candidates — confirm by content hash.
-            var byHash: [String: [FileFacts]] = [:]
-            for f in group {
-                if let h = QuickHash.hash(path: f.path) {
-                    byHash[h, default: []].append(f)
-                }
+        for (size, group) in bySize where group.count > 1 {
+            // Never dedup cloud-synced files — a local delete can propagate to
+            // iCloud/Dropbox and other devices.
+            let candidates = group.filter { !FileIdentity.isCloudSynced($0.path) }
+            guard candidates.count > 1 else { continue }
+
+            // Same-size candidates — bucket by a cheap sampled hash first.
+            var bySample: [String: [FileFacts]] = [:]
+            for f in candidates {
+                if let h = QuickHash.hash(path: f.path) { bySample[h, default: []].append(f) }
             }
-            for (_, dupes) in byHash where dupes.count > 1 {
-                // Keep the oldest (likely the original); suggest removing the rest.
-                let sorted = dupes.sorted {
-                    ($0.lastModified ?? .distantPast) < ($1.lastModified ?? .distantPast)
+            for (sampleKey, sampled) in bySample where sampled.count > 1 {
+                // Confirm true identity for large files — a head/tail match is
+                // not proof, so we never claim "exact duplicate" without it.
+                let confirmed: [String: [FileFacts]]
+                if size <= QuickHash.fullHashLimit {
+                    confirmed = [sampleKey: sampled]
+                } else {
+                    var byFull: [String: [FileFacts]] = [:]
+                    for f in sampled {
+                        if let h = QuickHash.fullHash(path: f.path) { byFull[h, default: []].append(f) }
+                    }
+                    confirmed = byFull
                 }
-                let keep = sorted[0]
-                for dup in sorted.dropFirst() {
-                    out.append(Suggestion(
-                        path: dup.path, sizeBytes: dup.size, reason: .duplicate,
-                        rationale: "Exact duplicate of “\((keep.path as NSString).lastPathComponent)” (same content, \(ByteFormatter.string(dup.size))). You can safely keep just one copy.",
-                        lastModified: dup.lastModified, lastAccessed: dup.lastAccessed,
-                        confidence: 0.9, riskTier: .blue, duplicateOf: keep.path))
+                for (_, exact) in confirmed where exact.count > 1 {
+                    // Collapse hardlinks — removing another name for one inode
+                    // frees nothing, so it isn't a reclaimable duplicate.
+                    var byInode: [String: FileFacts] = [:]
+                    var noKey: [FileFacts] = []
+                    for f in exact {
+                        if let k = FileIdentity.inodeKey(f.path) {
+                            if byInode[k] == nil { byInode[k] = f }
+                        } else { noKey.append(f) }
+                    }
+                    let distinct = Array(byInode.values) + noKey
+                    guard distinct.count > 1 else { continue }
+                    // Keep the NEWEST copy — unified with DuplicateFinder so the
+                    // two engines never disagree on which file to keep.
+                    let sorted = distinct.sorted {
+                        ($0.lastModified ?? .distantPast) > ($1.lastModified ?? .distantPast)
+                    }
+                    let keep = sorted[0]
+                    for dup in sorted.dropFirst() {
+                        out.append(Suggestion(
+                            path: dup.path, sizeBytes: dup.size, reason: .duplicate,
+                            rationale: "Exact duplicate of “\((keep.path as NSString).lastPathComponent)” — identical content, \(ByteFormatter.string(dup.size)). Reclaim keeps the newest copy; removing this one is reversible.",
+                            lastModified: dup.lastModified, lastAccessed: dup.lastAccessed,
+                            confidence: 0.9, riskTier: .blue, duplicateOf: keep.path))
+                    }
                 }
             }
         }

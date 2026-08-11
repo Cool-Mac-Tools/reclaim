@@ -77,7 +77,7 @@ public struct OrphanScanner: Sendable {
         "crashreporter", "mobiledevice", "mobilesync", "coresimulator",
         "appstore", "app store", "cloudkit", "clouddocs", "icloud",
         "spotlight", "quicklook", "diagnostics", "syncservices",
-        "addressbook", "calendarageent", "knowledge", "biome",
+        "addressbook", "calendaragent", "knowledge", "biome",
         "systempolicy", "tcc", "security", "keychain",
     ]
 

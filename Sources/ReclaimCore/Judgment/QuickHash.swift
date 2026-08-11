@@ -34,4 +34,18 @@ enum QuickHash {
         }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
+
+    /// Full-content SHA-256 — reads the ENTIRE file in bounded chunks. Used to
+    /// confirm a sampled-hash collision before we ever tell a user two files are
+    /// identical: a head+tail match can miss a difference in the middle (common
+    /// for videos, disk images, and archives that share headers/footers).
+    static func fullHash(path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let chunk = try? handle.read(upToCount: 4 * 1024 * 1024), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
 }

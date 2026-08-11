@@ -84,6 +84,31 @@ import Foundation
         #expect(PathResolver.resolve("~/**/.next/cache").isEmpty)
     }
 
+    @Test func nestedFindingsAreDroppedToAvoidDoubleCounting() {
+        func finding(_ path: String, _ tier: RiskTier) -> Finding {
+            Finding(recipeID: path, displayName: path, group: "g", path: path,
+                    allocatedBytes: 100, apparentBytes: 100, riskTier: tier,
+                    action: .quarantine, explanation: "", impact: "", recurrence: "",
+                    lastModified: nil, blockingAppRunning: false, skippedProtectedPaths: [])
+        }
+        // Parent + child at the same (safe) tier: the child is folded away, since
+        // the parent's measurement already includes it.
+        let parent = finding("/Users/x/Library/Logs", .green)
+        let child = finding("/Users/x/Library/Logs/DiagnosticReports", .green)
+        let sibling = finding("/Users/x/Library/Caches/foo", .green)
+        let kept = StorageScanner.dropNestedFindings([child, parent, sibling]).map(\.path)
+        #expect(kept.contains("/Users/x/Library/Logs"))
+        #expect(!kept.contains("/Users/x/Library/Logs/DiagnosticReports"))
+        #expect(kept.contains("/Users/x/Library/Caches/foo"))
+
+        // Safety: a MORE-protected child must NOT be folded into a permissive
+        // parent — that could sweep a Red subtree into a Green clean.
+        let greenParent = finding("/Users/x/data", .green)
+        let redChild = finding("/Users/x/data/protected", .red)
+        let kept2 = StorageScanner.dropNestedFindings([greenParent, redChild]).map(\.path)
+        #expect(kept2.contains("/Users/x/data/protected"))
+    }
+
     @Test func findingsAreDedupedByPath() {
         // Two recipes (or two globs) pointing at the same path must yield ONE
         // finding — never a double-count that would inflate totals and fail on
@@ -357,6 +382,45 @@ import Foundation
         try Data(repeating: 2, count: 50_000).write(to: root.appendingPathComponent("y.bin"))
         let files = ["x.bin", "y.bin"].map {
             ClusterFile(path: root.appendingPathComponent($0).path, bytes: 50_000, modified: nil)
+        }
+        #expect(DuplicateFinder.find(in: files).isEmpty)
+    }
+
+    @Test func identicalEndsDifferentMiddleIsNotADuplicate() throws {
+        // The high-regret case: two large files with the same size and matching
+        // head + tail but a different middle. A sampled hash alone would call
+        // these "exact duplicates"; the full-content confirm must reject them.
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dup3-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let size = 8 * 1024 * 1024                      // above QuickHash.fullHashLimit
+        let head = Data(repeating: 0xAA, count: 1024 * 1024)
+        let tail = Data(repeating: 0xBB, count: 1024 * 1024)
+        let midLen = size - head.count - tail.count
+        var a = head; a.append(Data(repeating: 0x11, count: midLen)); a.append(tail)
+        var b = head; b.append(Data(repeating: 0x22, count: midLen)); b.append(tail)
+        try a.write(to: root.appendingPathComponent("a.bin"))
+        try b.write(to: root.appendingPathComponent("b.bin"))
+        let files = ["a.bin", "b.bin"].map {
+            ClusterFile(path: root.appendingPathComponent($0).path, bytes: Int64(size), modified: nil)
+        }
+        #expect(DuplicateFinder.find(in: files).isEmpty)
+    }
+
+    @Test func hardlinksAreNotReclaimableDuplicates() throws {
+        // Two names for one inode: deleting the "extra" frees nothing, so it
+        // must not be offered as a reclaimable duplicate.
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dup4-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let original = root.appendingPathComponent("orig.bin")
+        try Data(repeating: 5, count: 300_000).write(to: original)
+        let link = root.appendingPathComponent("link.bin")
+        try fm.linkItem(at: original, to: link)          // hardlink, same inode
+        let files = ["orig.bin", "link.bin"].map {
+            ClusterFile(path: root.appendingPathComponent($0).path, bytes: 300_000, modified: nil)
         }
         #expect(DuplicateFinder.find(in: files).isEmpty)
     }

@@ -41,9 +41,22 @@ public enum SupportedCLI {
     /// shell so PATH matches their real setup (nvm, pyenv, Homebrew, …) — a GUI
     /// app's default PATH wouldn't find them otherwise.
     public static func availableTools(among tools: Set<String>) -> Set<String> {
+        // Every command here is a hard-coded constant keyed off a trusted recipe
+        // id, so no user path ever reaches the shell. As defense-in-depth we
+        // still refuse to probe a tool name that isn't a bare identifier, so a
+        // future recipe can never smuggle shell metacharacters into `command -v`.
         var found: Set<String> = []
-        for tool in tools where shell("command -v \(tool)").code == 0 { found.insert(tool) }
+        for tool in tools where Self.isSafeToolName(tool)
+            && shell("command -v \(tool)").code == 0 { found.insert(tool) }
         return found
+    }
+
+    /// A tool name we're willing to interpolate into a shell probe: letters,
+    /// digits, and a few package-manager-safe punctuation characters only.
+    static func isSafeToolName(_ tool: String) -> Bool {
+        !tool.isEmpty && tool.allSatisfy {
+            $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == "."
+        }
     }
 
     public struct RunResult: Sendable {

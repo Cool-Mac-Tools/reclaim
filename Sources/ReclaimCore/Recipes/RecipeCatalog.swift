@@ -86,7 +86,7 @@ public enum RecipeCatalog {
             riskTier: .green,
             requiresQuit: ["Xcode"],
             action: .quarantine,
-            explanation: "Generated SwiftUI preview data from past development sessions. In the case study 13 GB remained even after Xcode was uninstalled.",
+            explanation: "Generated SwiftUI preview data from past development sessions. Often lingers even after Xcode is uninstalled.",
             impact: "No source code, archives, signing profiles, or runtimes are affected. Previews rebuild when used again.",
             recurrence: "Low unless SwiftUI previews are used heavily."
         ),
@@ -142,7 +142,7 @@ public enum RecipeCatalog {
             paths: ["~/Library/Developer/CoreSimulator/Caches"],
             riskTier: .green,
             action: .supportedCLI,
-            explanation: "Simulator dyld caches. In the case study a 3.8 GB cache accompanied an orphaned runtime.",
+            explanation: "Simulator dyld caches, often left behind alongside orphaned runtimes.",
             impact: "Regenerated when simulators run. Runtimes themselves are managed assets and must go through simctl — never raw deletion.",
             recurrence: "Returns with simulator use."
         ),
@@ -153,7 +153,7 @@ public enum RecipeCatalog {
             paths: ["/Library/Developer/CoreSimulator/Volumes", "/Library/Developer/CoreSimulator/Images"],
             riskTier: .red,
             action: .supportedCLI,
-            explanation: "Mounted, protected simulator runtime images managed by MobileAsset. The case study's 11.6 GB win required the supported `xcrun simctl runtime` flow.",
+            explanation: "Mounted, protected simulator runtime images managed by MobileAsset. Removing them safely requires the supported `xcrun simctl runtime` flow.",
             impact: "Raw `rm` is unsafe and blocked by macOS. Only official runtime management (simctl / Xcode components) may remove these.",
             recurrence: "Returns when new runtimes are downloaded."
         ),
@@ -165,7 +165,7 @@ public enum RecipeCatalog {
             riskTier: .green,
             action: .quarantine,
             explanation: "Cached checkouts of Swift package dependencies.",
-            impact: "Packages re-download on next resolve. Keep if actively doing Swift development (case study kept it for that reason).",
+            impact: "Packages re-download on next resolve. Keep if you're actively doing Swift development.",
             recurrence: "Returns with Swift builds."
         ),
     ]
@@ -180,7 +180,7 @@ public enum RecipeCatalog {
             paths: ["~/.npm/_cacache"],
             riskTier: .green,
             action: .supportedCLI,
-            explanation: "npm's content-addressable cache of every downloaded package tarball. 7.9 GB in the case study.",
+            explanation: "npm's content-addressable cache of every downloaded package tarball.",
             impact: "Packages re-download when needed; installed project dependencies (node_modules) are untouched. Prefers `npm cache clean --force`; falls back to ownership-aware quarantine.",
             recurrence: "Likely to grow with package installs."
         ),
@@ -191,7 +191,7 @@ public enum RecipeCatalog {
             paths: ["~/.npm/_npx"],
             riskTier: .green,
             action: .quarantine,
-            explanation: "Packages fetched on-the-fly by `npx` invocations. 1.3 GB in the case study.",
+            explanation: "Packages fetched on-the-fly by `npx` invocations.",
             impact: "Tools re-download the next time they are invoked with npx.",
             recurrence: "Returns with npx use."
         ),
@@ -228,18 +228,11 @@ public enum RecipeCatalog {
             impact: "Re-downloaded on the next native module build.",
             recurrence: "Returns when native modules compile."
         ),
-        Recipe(
-            id: "dev.nextjs.builds",
-            displayName: "Next.js build outputs",
-            group: "JavaScript",
-            paths: ["~/**/.next/cache"],
-            riskTier: .green,
-            thresholdBytes: 200 * 1024 * 1024,
-            action: .reviewOnly,
-            explanation: "Next.js build caches inside project folders.",
-            impact: "Rebuilt on next `next build`/`dev`. Surfaced repo-aware — never deleted without seeing which project it belongs to.",
-            recurrence: "Returns with builds."
-        ),
+        // NOTE: project-local build artifacts (.next/cache, dist, target,
+        // node_modules) need a bounded repo-aware walk — see the repo-aware
+        // module (Track 4). A `~/**/.next/cache` recipe can't be resolved by the
+        // single-level glob engine, so it's intentionally not listed here rather
+        // than shipped as a recipe that never fires.
     ]
 
     // MARK: - Browser automation
@@ -263,7 +256,7 @@ public enum RecipeCatalog {
             paths: ["~/.cache/puppeteer"],
             riskTier: .green,
             action: .quarantine,
-            explanation: "Chrome/Chromium binaries downloaded by Puppeteer. 1.0 GB in the case study.",
+            explanation: "Chrome/Chromium binaries downloaded by Puppeteer.",
             impact: "Re-downloads on next Puppeteer install/run.",
             recurrence: "Returns with Puppeteer use."
         ),
@@ -280,7 +273,7 @@ public enum RecipeCatalog {
             riskTier: .green,
             requiresQuit: ["Messages"],
             action: .quarantine,
-            explanation: "Generated previews of message attachments — separate from the attachments themselves. 8.8 GB in the case study.",
+            explanation: "Generated previews of message attachments — separate from the attachments themselves.",
             impact: "Actual attachments remain. Previews regenerate as conversations are viewed.",
             recurrence: "Regrows with Messages use."
         ),
@@ -292,7 +285,7 @@ public enum RecipeCatalog {
             riskTier: .green,
             requiresQuit: ["Messages"],
             action: .quarantine,
-            explanation: "Temporary attachment copies in the Messages container. 3.0 GB in the case study.",
+            explanation: "Temporary attachment copies in the Messages container.",
             impact: "Temp items only; original attachments untouched.",
             recurrence: "Regrows with attachment viewing."
         ),
@@ -305,7 +298,7 @@ public enum RecipeCatalog {
             thresholdBytes: 1024 * 1024 * 1024,
             requiresQuit: ["Messages"],
             action: .reviewOnly,
-            explanation: "The actual photos, videos, and files received in Messages. 13.5 GB in the case study.",
+            explanation: "The actual photos, videos, and files received in Messages.",
             impact: "Personal content. iCloud sync behavior means local deletion may propagate — requires explicit per-item review with an age/size filter and a clear cloud warning. Never auto-deleted.",
             recurrence: "Grows with received attachments."
         ),
@@ -317,7 +310,7 @@ public enum RecipeCatalog {
             riskTier: .green,
             requiresQuit: ["Google Chrome"],
             action: .quarantine,
-            explanation: "Browser cache — separate from profiles, passwords, bookmarks, and history in Application Support. 2.9 GB in the case study.",
+            explanation: "Browser cache — separate from profiles, passwords, bookmarks, and history in Application Support.",
             impact: "Pages re-cache as you browse. Profile data untouched.",
             recurrence: "Regrows with browsing."
         ),
@@ -328,7 +321,7 @@ public enum RecipeCatalog {
             paths: ["~/Library/Caches/*ShipIt*", "~/Library/Caches/com.*.ShipIt"],
             riskTier: .green,
             action: .quarantine,
-            explanation: "Update staging folders left by Electron apps (Claude, Discord, Notion, Slack, Screen Studio and friends). Several GB combined in the case study.",
+            explanation: "Update staging folders left by Electron apps (Claude, Discord, Notion, Slack, Screen Studio and friends).",
             impact: "Safe once the owning app is closed. Returns after the app's next self-update.",
             recurrence: "Returns after app updates."
         ),

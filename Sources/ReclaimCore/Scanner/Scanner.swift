@@ -26,7 +26,14 @@ public struct StorageScanner: Sendable {
                     guard seenPaths.insert(resolved).inserted else { continue }
                     let measurement = SizeMeasurement.measure(resolved)
                     guard measurement.allocatedBytes >= recipe.thresholdBytes else { continue }
-                    let blockingApps = recipe.requiresQuit.filter { running.contains($0.lowercased()) }
+                    // Match on the FULL executable path (substring), so multi-word
+                    // apps like "Microsoft Teams" / "Adobe Premiere Pro" actually
+                    // trip their quit-first gate — `ps comm` truncates to 16 chars,
+                    // which silently defeated exact-name matching.
+                    let blockingApps = recipe.requiresQuit.filter { name in
+                        let n = name.lowercased()
+                        return running.contains { $0.contains(n) }
+                    }
                     let blocking = !blockingApps.isEmpty
                     findings.append(Finding(
                         recipeID: recipe.id,
@@ -49,6 +56,12 @@ public struct StorageScanner: Sendable {
             }
         }
 
+        // Drop any finding whose path is nested under another finding's path.
+        // A parent recipe (e.g. ~/Library/Logs) already measures its child
+        // (~/Library/Logs/DiagnosticReports), so keeping both double-counts the
+        // headline "recoverable" total and shows a redundant row. Keep the
+        // broadest (ancestor) finding — its cleanup covers the descendant.
+        findings = Self.dropNestedFindings(findings)
         findings.sort { $0.allocatedBytes > $1.allocatedBytes }
 
         let volume = VolumeProbe.dataVolume()
@@ -61,6 +74,26 @@ public struct StorageScanner: Sendable {
             snapshots: SnapshotProbe.status(),
             elapsedSeconds: Date().timeIntervalSince(start)
         )
+    }
+
+    /// Remove findings that live inside another finding — their bytes are
+    /// already counted in the ancestor's measurement. Ancestors (shorter paths)
+    /// are considered first, so every descendant finds its parent and is dropped.
+    ///
+    /// Safety guard: only fold a descendant into an ancestor that is *at least as
+    /// protected* (same or higher risk tier). We never drop a more-protected
+    /// child under a more-permissive parent — that could sweep a Red/Orange
+    /// subtree into a Green one-click clean.
+    static func dropNestedFindings(_ findings: [Finding]) -> [Finding] {
+        let byDepth = findings.sorted { $0.path.count < $1.path.count }
+        var kept: [Finding] = []
+        for f in byDepth {
+            let coveredBySaferAncestor = kept.contains {
+                f.path.hasPrefix($0.path + "/") && $0.riskTier >= f.riskTier
+            }
+            if !coveredBySaferAncestor { kept.append(f) }
+        }
+        return kept
     }
 }
 
@@ -149,12 +182,15 @@ enum SizeMeasurement {
 // MARK: - Process + volume probes
 
 enum RunningProcessProbe {
-    /// Lowercased names of running processes, via `ps` (works without AppKit,
-    /// so the CLI stays usable over SSH; the app can layer NSWorkspace later).
+    /// Lowercased FULL executable paths of running processes, via `ps` (works
+    /// without AppKit, so the CLI stays usable over SSH; the app can layer
+    /// NSWorkspace later). We use `comm=` (full path, no header, untruncated)
+    /// rather than `-c comm` (16-char accounting name) so callers can substring
+    /// -match multi-word app names like "Microsoft Teams" reliably.
     static func snapshot() -> Set<String> {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        task.arguments = ["-axco", "comm"]
+        task.arguments = ["-axo", "comm="]
         let pipe = Pipe()
         task.standardOutput = pipe
         task.standardError = Pipe()
@@ -162,7 +198,7 @@ enum RunningProcessProbe {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
         guard let text = String(data: data, encoding: .utf8) else { return [] }
-        return Set(text.split(separator: "\n").dropFirst().map {
+        return Set(text.split(separator: "\n").map {
             $0.trimmingCharacters(in: .whitespaces).lowercased()
         })
     }
