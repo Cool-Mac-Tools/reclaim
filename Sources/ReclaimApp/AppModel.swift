@@ -86,6 +86,10 @@ final class AppModel: ObservableObject {
 
     struct AIRequest: Identifiable {
         let id = UUID(); let title: String; let system: String; let user: String
+        /// The item's path, so the explain sheet can enrich the prompt with live
+        /// metadata (folder contents, last-used date) before asking. Nil for the
+        /// whole-Mac summary, which needs no per-file enrichment.
+        var contextPath: String? = nil
     }
     /// When set, the AI explain popup is shown for this item.
     @Published var aiRequest: AIRequest?
@@ -98,19 +102,46 @@ final class AppModel: ObservableObject {
         AIRequest(title: item.name, system: AIPrompt.system,
             user: AIPrompt.user(name: item.name, location: item.id, size: Fmt.bytes(item.bytes),
                                 tier: item.tier.plainLabel, detail: item.detail,
-                                impact: item.impact, recurrence: item.recurrence))
+                                impact: item.impact, recurrence: item.recurrence),
+            contextPath: item.id)
     }
     static func request(forFile file: ClusterFile, category: String) -> AIRequest {
         let name = (file.path as NSString).lastPathComponent
         return AIRequest(title: name, system: AIPrompt.system,
             user: AIPrompt.user(name: name, location: file.path, size: Fmt.bytes(file.bytes),
-                                tier: category, detail: "", impact: "", recurrence: ""))
+                                tier: category, detail: "", impact: "", recurrence: ""),
+            contextPath: file.path)
     }
     static func request(forNode node: FileNode, category: String) -> AIRequest {
         AIRequest(title: node.name, system: AIPrompt.system,
             user: AIPrompt.user(name: node.name, location: node.path, size: Fmt.bytes(node.bytes),
                                 tier: category, detail: node.isDirectory ? "A folder." : "",
-                                impact: "", recurrence: ""))
+                                impact: "", recurrence: ""),
+            contextPath: node.path)
+    }
+
+    /// Build a whole-Mac "what should I clean and why?" request from the current
+    /// scan + map. Metadata only — category names, item names, sizes, and tiers,
+    /// never file contents. Nil until there's something to summarize.
+    func macSummaryRequest() -> AIRequest? {
+        guard hasScanned || mapReport != nil else { return nil }
+        var lines: [String] = []
+        if totalBytes > 0 {
+            lines.append("Disk: \(Fmt.bytes(freeBytes)) free of \(Fmt.bytes(totalBytes)).")
+        }
+        lines.append("Reclaim found \(Fmt.bytes(safeReclaimBytes)) safe to reclaim now and "
+                   + "\(Fmt.bytes(reviewBytes)) worth reviewing.")
+        let top = Array(items.prefix(12))
+        if !top.isEmpty {
+            lines.append("\nLargest items found:")
+            for it in top { lines.append("  • \(it.name) — \(Fmt.bytes(it.bytes)) — \(it.tier.plainLabel)") }
+        }
+        if let map = mapReport {
+            lines.append("\nWhere space goes overall:")
+            for c in map.categories.prefix(8) { lines.append("  • \(c.name) — \(Fmt.bytes(c.bytes))") }
+        }
+        return AIRequest(title: "What should I clean?", system: AIPrompt.summarySystem,
+                         user: lines.joined(separator: "\n"))
     }
 
     /// A single row in the unified results list, from any source.

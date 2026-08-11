@@ -164,15 +164,32 @@ enum AIError: LocalizedError {
     }
 }
 
-/// One-shot text completion against the chosen provider. Metadata only — file
-/// contents never leave the Mac.
+/// One turn in a conversation. `assistant` turns carry the model's prior
+/// replies so follow-up questions have context.
+struct AIMessage: Identifiable, Equatable {
+    enum Role: String { case user, assistant }
+    let id = UUID()
+    let role: Role
+    var text: String
+}
+
+/// Text completion against the chosen provider. Metadata only — file contents
+/// never leave the Mac.
 enum AIClient {
+    /// One-shot convenience: a single user message, no history.
     static func explain(provider: AIProvider, model: String, key: String,
                         system: String, user: String) async throws -> String {
+        try await chat(provider: provider, model: model, key: key, system: system,
+                       messages: [AIMessage(role: .user, text: user)])
+    }
+
+    /// Multi-turn chat so the explain popup can take follow-up questions.
+    static func chat(provider: AIProvider, model: String, key: String,
+                     system: String, messages: [AIMessage]) async throws -> String {
         switch provider {
-        case .openai:    try await openai(model, key, system, user)
-        case .anthropic: try await anthropic(model, key, system, user)
-        case .google:    try await google(model, key, system, user)
+        case .openai:    try await openaiChat(model, key, system, messages)
+        case .anthropic: try await anthropicChat(model, key, system, messages)
+        case .google:    try await googleChat(model, key, system, messages)
         }
     }
 
@@ -191,36 +208,40 @@ enum AIClient {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    private static func openai(_ model: String, _ key: String, _ system: String, _ user: String) async throws -> String {
+    private static func openaiChat(_ model: String, _ key: String, _ system: String, _ msgs: [AIMessage]) async throws -> String {
+        var messages: [[String: Any]] = [["role": "system", "content": system]]
+        messages += msgs.map { ["role": $0.role.rawValue, "content": $0.text] }
         let json = try await post(
             URL(string: "https://api.openai.com/v1/chat/completions")!,
             headers: ["Authorization": "Bearer \(key)"],
-            body: ["model": model, "messages": [
-                ["role": "system", "content": system], ["role": "user", "content": user]]])
+            body: ["model": model, "messages": messages])
         let choices = json["choices"] as? [[String: Any]]
         let text = (choices?.first?["message"] as? [String: Any])?["content"] as? String
         guard let text, !text.isEmpty else { throw AIError.empty }
         return text
     }
 
-    private static func anthropic(_ model: String, _ key: String, _ system: String, _ user: String) async throws -> String {
+    private static func anthropicChat(_ model: String, _ key: String, _ system: String, _ msgs: [AIMessage]) async throws -> String {
+        let messages = msgs.map { ["role": $0.role.rawValue, "content": $0.text] }
         let json = try await post(
             URL(string: "https://api.anthropic.com/v1/messages")!,
             headers: ["x-api-key": key, "anthropic-version": "2023-06-01"],
-            body: ["model": model, "max_tokens": 1024, "system": system,
-                   "messages": [["role": "user", "content": user]]])
+            body: ["model": model, "max_tokens": 1024, "system": system, "messages": messages])
         let blocks = json["content"] as? [[String: Any]] ?? []
         let text = blocks.compactMap { $0["text"] as? String }.joined()
         guard !text.isEmpty else { throw AIError.empty }
         return text
     }
 
-    private static func google(_ model: String, _ key: String, _ system: String, _ user: String) async throws -> String {
+    private static func googleChat(_ model: String, _ key: String, _ system: String, _ msgs: [AIMessage]) async throws -> String {
+        // Gemini uses role "model" for assistant turns.
+        let contents = msgs.map { m -> [String: Any] in
+            ["role": m.role == .assistant ? "model" : "user", "parts": [["text": m.text]]]
+        }
         let json = try await post(
             URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent")!,
             headers: ["x-goog-api-key": key],
-            body: ["system_instruction": ["parts": [["text": system]]],
-                   "contents": [["role": "user", "parts": [["text": user]]]]])
+            body: ["system_instruction": ["parts": [["text": system]]], "contents": contents])
         let candidates = json["candidates"] as? [[String: Any]]
         let content = candidates?.first?["content"] as? [String: Any]
         let parts = content?["parts"] as? [[String: Any]] ?? []
@@ -268,5 +289,52 @@ enum AIPrompt {
         if !recurrence.isEmpty { lines.append("Comes back: \(recurrence)") }
         lines.append("\nQuestion: What is this, and is it safe to delete?")
         return lines.joined(separator: "\n")
+    }
+
+    /// System prompt for the whole-Mac "what should I clean?" summary.
+    static let summarySystem = """
+    You are Reclaim's storage advisor. You're given a summary of a Mac's storage \
+    scan — categories, the largest items found, sizes, and safety tiers (you \
+    never see file contents). Give a short, friendly, PRIORITIZED plan: what's \
+    safe to reclaim first and why, what to review carefully, and what to leave \
+    alone. Be specific and cite the numbers from the data. Keep it to a short \
+    bulleted list or 4–8 sentences. You advise only — the user clicks to act.
+    """
+}
+
+/// Builds extra, METADATA-ONLY context for the explain popup: when an item was
+/// last used, and — for a folder — what's inside it (names and sizes only,
+/// never file contents). Runs off the main thread; keeps the privacy promise.
+enum AIContext {
+    static func enrich(path: String) -> String {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: path, isDirectory: &isDir) else { return "" }
+        var lines: [String] = []
+        let url = URL(fileURLWithPath: path)
+        if let v = try? url.resourceValues(forKeys: [.contentAccessDateKey, .contentModificationDateKey]) {
+            if let acc = v.contentAccessDate {
+                lines.append("Last opened \(Int(Date().timeIntervalSince(acc) / 86400)) days ago.")
+            }
+            if let mod = v.contentModificationDate {
+                lines.append("Last changed \(Int(Date().timeIntervalSince(mod) / 86400)) days ago.")
+            }
+        }
+        if isDir.boolValue {
+            let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .isDirectoryKey]
+            let entries = (try? fm.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])) ?? []
+            let sized = entries.map { u -> (name: String, bytes: Int64, dir: Bool) in
+                let v = try? u.resourceValues(forKeys: keys)
+                return (u.lastPathComponent, Int64(v?.totalFileAllocatedSize ?? 0), v?.isDirectory ?? false)
+            }.sorted { $0.bytes > $1.bytes }
+            if !sized.isEmpty {
+                lines.append("This folder holds \(entries.count) item(s). Largest:")
+                for e in sized.prefix(8) {
+                    lines.append("  • \(e.name)\(e.dir ? "/ (folder)" : "") — \(e.bytes > 0 ? Fmt.bytes(e.bytes) : "small")")
+                }
+            }
+        }
+        return lines.isEmpty ? "" : "\nLive details from the Mac:\n" + lines.joined(separator: "\n")
     }
 }

@@ -5,9 +5,11 @@ import SwiftUI
 /// My Mac. Nothing here changes your Mac; it only configures the assistant.
 struct AIView: View {
     @EnvironmentObject var ai: AISettings
+    @EnvironmentObject var model: AppModel
     @State private var keyDraft = ""
     @State private var testing = false
     @State private var testResult: TestResult?
+    @State private var summaryRequest: AppModel.AIRequest?
 
     enum TestResult { case ok, fail(String) }
 
@@ -17,6 +19,7 @@ struct AIView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                if ai.isReady { summarySection }
                 providerTabs
                 keySection
                 modelSection
@@ -28,6 +31,33 @@ struct AIView: View {
         }
         .navigationTitle("AI Assistant")
         .frame(maxWidth: .infinity)
+        .sheet(item: $summaryRequest) { req in
+            AIExplainSheet(request: req).environmentObject(ai)
+        }
+    }
+
+    // MARK: Whole-Mac summary
+
+    private var summarySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Ask about your whole Mac").font(.headline)
+            HStack(spacing: 12) {
+                Image(systemName: "wand.and.stars").font(.title2).foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("What should I clean, and why?").fontWeight(.medium)
+                    Text(model.hasScanned || model.mapReport != nil
+                         ? "Get a prioritized, plain-language plan from your latest scan."
+                         : "Run a scan first, then ask for a personalized cleanup plan.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Ask AI") { summaryRequest = model.macSummaryRequest() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!(model.hasScanned || model.mapReport != nil))
+            }
+            .padding(12)
+            .background(.tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        }
     }
 
     // MARK: Header
