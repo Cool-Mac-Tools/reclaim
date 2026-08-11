@@ -426,6 +426,35 @@ import Foundation
     }
 }
 
+@Suite struct RepoScannerTests {
+    @Test func detectsProjectArtifactsButNotStrayFolders() throws {
+        let fm = FileManager.default
+        let home = fm.temporaryDirectory.appendingPathComponent("repo-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: home) }
+
+        // A real project: has package.json + a big node_modules.
+        let app = home.appendingPathComponent("myapp")
+        let nm = app.appendingPathComponent("node_modules")
+        try fm.createDirectory(at: nm, withIntermediateDirectories: true)
+        _ = fm.createFile(atPath: app.appendingPathComponent("package.json").path,
+                          contents: Data("{}".utf8))
+        try Data(count: 3 * 1024 * 1024).write(to: nm.appendingPathComponent("big.bin"))
+
+        // A stray "build" folder with NO project marker — must be ignored.
+        let stray = home.appendingPathComponent("random/build")
+        try fm.createDirectory(at: stray, withIntermediateDirectories: true)
+        try Data(count: 3 * 1024 * 1024).write(to: stray.appendingPathComponent("x.bin"))
+
+        var config = RepoScanner.Config()
+        config.minBytes = 1 * 1024 * 1024
+        let found = RepoScanner(config: config).scan(homeOverride: home.path)
+
+        #expect(found.count == 1)
+        #expect(found.first?.kind == "node_modules")
+        #expect(found.first?.project == "myapp")
+    }
+}
+
 @Suite struct SystemMonitorTests {
     @Test func sampleReadsRealSystemState() {
         let h = SystemMonitor().sample()

@@ -49,6 +49,8 @@ public struct SystemHealth: Sendable {
     public let totalDiskBytes: Int64
     // Startup
     public let loginItemsCount: Int
+    // Time Machine local snapshots (can pin space that "won't free")
+    public let snapshotCount: Int
     // Processes (all, unsorted; the UI slices top-by-cpu / top-by-memory)
     public let processes: [RunningProcess]
 
@@ -114,6 +116,7 @@ public struct SystemMonitor: Sendable {
             freeDiskBytes: disk.free,
             totalDiskBytes: disk.total,
             loginItemsCount: Self.loginItemsCount(),
+            snapshotCount: SnapshotProbe.status().count,
             processes: Self.processList())
     }
 
@@ -186,6 +189,16 @@ public struct SystemMonitor: Sendable {
                 title: "A lot of items launch at startup",
                 detail: "\(h.loginItemsCount) background/login items start with your Mac, slowing boot and running in the background. Review them in System Settings → General → Login Items.",
                 symbol: "power"))
+        }
+
+        // Time Machine local snapshots — the usual reason "I deleted files but
+        // free space didn't move". Honest, read-only: they expire on their own.
+        if h.snapshotCount > 0 {
+            out.append(Diagnosis(
+                id: "snapshots", severity: .info,
+                title: "Time Machine is holding some space",
+                detail: "\(h.snapshotCount) local snapshot\(h.snapshotCount == 1 ? "" : "s") on your disk pin recently-changed files as a safety net. This is why freed space can lag — macOS clears them on its own, usually within 24 hours.",
+                symbol: "clock.arrow.circlepath"))
         }
 
         if out.isEmpty {

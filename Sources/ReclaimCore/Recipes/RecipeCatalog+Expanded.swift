@@ -691,4 +691,72 @@ extension RecipeCatalog {
             recurrence: "Grows as you import assets.",
             confidence: .communityKnown),
     ]
+
+    // MARK: - Coverage gaps 3 (Aug 2026): heavy in-profile browser subcaches,
+    // Xcode's own cache, and media/app caches. Fixed paths (the single-level
+    // globber can't reach nested profile dirs), community-sourced, detection
+    // only until verified.
+    public static let coverage3: [Recipe] = [
+        // ── Chromium browser sub-caches (main "Default" profile) ─────
+        Recipe(
+            id: "app.chrome.service-worker",
+            displayName: "Chrome offline app cache",
+            group: "Browsers",
+            paths: ["~/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage",
+                    "~/Library/Application Support/Google/Chrome/Default/Code Cache",
+                    "~/Library/Application Support/Google/Chrome/Default/GPUCache"],
+            riskTier: .green, requiresQuit: ["Google Chrome"], action: .quarantine,
+            explanation: "Chrome's per-site offline caches, compiled-code cache, and GPU shader cache for your main profile — regenerable, separate from history, passwords, and bookmarks.",
+            impact: "Sites re-cache as you revisit them. Logins, history, and bookmarks are untouched.",
+            recurrence: "Regrows with browsing.",
+            confidence: .communityKnown),
+        Recipe(
+            id: "app.chrome.gpucache-top",
+            displayName: "Chrome shader cache",
+            group: "Browsers",
+            paths: ["~/Library/Application Support/Google/Chrome/GraphiteDawnCache",
+                    "~/Library/Application Support/Google/Chrome/GrShaderCache"],
+            riskTier: .green, requiresQuit: ["Google Chrome"], action: .quarantine,
+            explanation: "Chrome's compiled GPU/shader caches — rebuilt automatically.",
+            impact: "Rebuilds on next launch; nothing personal is stored here.",
+            recurrence: "Regrows as Chrome runs.",
+            confidence: .communityKnown),
+        // ── Xcode's own app cache (distinct from DerivedData) ────────
+        Recipe(
+            id: "dev.xcode.cache",
+            displayName: "Xcode app cache",
+            group: "Xcode",
+            paths: ["~/Library/Caches/com.apple.dt.Xcode"],
+            riskTier: .green, requiresQuit: ["Xcode"], action: .quarantine,
+            explanation: "Xcode's own on-disk cache (downloaded docs, index bits, temporary build helpers) — separate from DerivedData.",
+            impact: "Rebuilt by Xcode as needed; no projects, archives, or signing assets are affected.",
+            recurrence: "Regrows with Xcode use.",
+            confidence: .communityKnown),
+        // ── Communication / media app caches ─────────────────────────
+        Recipe(
+            id: "app.slack.service-worker",
+            displayName: "Slack cache",
+            group: "General",
+            paths: ["~/Library/Application Support/Slack/Service Worker/CacheStorage",
+                    "~/Library/Application Support/Slack/Cache",
+                    "~/Library/Application Support/Slack/Code Cache"],
+            riskTier: .green, requiresQuit: ["Slack"], action: .quarantine,
+            explanation: "Slack's offline/message-attachment caches — regenerable; your workspaces and messages live on Slack's servers.",
+            impact: "Re-downloads as you open channels again. You stay signed in.",
+            recurrence: "Regrows with Slack use.",
+            confidence: .communityKnown),
+        Recipe(
+            id: "creative.adobe.media-cache",
+            displayName: "Adobe media cache",
+            group: "Creative",
+            paths: ["~/Library/Application Support/Adobe/Common/Media Cache Files",
+                    "~/Library/Application Support/Adobe/Common/Media Cache"],
+            riskTier: .blue, thresholdBytes: 500 * 1024 * 1024,
+            requiresQuit: ["Adobe Premiere Pro", "Adobe After Effects", "Adobe Audition"],
+            action: .reviewOnly,
+            explanation: "Cached conformed audio and peak files Premiere/After Effects generate for smooth playback.",
+            impact: "Regenerated when you reopen a project (first playback is slower). Keep it if you're mid-edit on a big project.",
+            recurrence: "Regrows as you edit.",
+            confidence: .communityKnown),
+    ]
 }

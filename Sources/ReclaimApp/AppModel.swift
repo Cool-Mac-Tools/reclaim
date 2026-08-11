@@ -36,6 +36,8 @@ final class AppModel: ObservableObject {
     @Published var scanReport: ScanReport?
     @Published var orphans: [Orphan] = []
     @Published var review: JudgmentReport?
+    /// Project build artifacts (node_modules, .next, target…) found repo-aware.
+    @Published var repos: [RepoArtifact] = []
     @Published var freeBytes: Int64 = 0
     @Published var totalBytes: Int64 = 0
     /// Tool binaries found on this Mac (npm, brew…) — gates the CLI cleanups.
@@ -201,13 +203,14 @@ final class AppModel: ObservableObject {
         mapMac()
         scanning = true
         hasScanned = false
-        scanReport = nil; orphans = []; review = nil; selected = []; extraTargets = [:]
+        scanReport = nil; orphans = []; review = nil; repos = []; selected = []; extraTargets = [:]
 
         Task {
             async let scan = Self.doScan()
             async let orph = Self.doOrphans()
             async let rev  = Self.doReview()
-            let (s, o, r) = await (scan, orph, rev)
+            async let rp   = Self.doRepos()
+            let (s, o, r, rpo) = await (scan, orph, rev, rp)
             // Which tool commands are actually usable — resolved via the login
             // shell so nvm/pyenv/Homebrew paths are found.
             let neededTools = Set(s.findings
@@ -218,6 +221,7 @@ final class AppModel: ObservableObject {
             self.scanReport = s
             self.orphans = o
             self.review = r
+            self.repos = rpo
             self.availableTools = avail
             self.freeBytes = s.volumeFreeBytes
             self.totalBytes = s.volumeTotalBytes
@@ -279,6 +283,9 @@ final class AppModel: ObservableObject {
     private nonisolated static func doReview() async -> JudgmentReport {
         await Task.detached(priority: .userInitiated) { JudgmentScanner().scan() }.value
     }
+    private nonisolated static func doRepos() async -> [RepoArtifact] {
+        await Task.detached(priority: .userInitiated) { RepoScanner().scan() }.value
+    }
 
     /// The merged, de-duplicated results list.
     var items: [CleanItem] {
@@ -318,6 +325,15 @@ final class AppModel: ObservableObject {
             out.append(CleanItem(id: s.path, name: (s.path as NSString).lastPathComponent,
                                  detail: s.rationale, bytes: s.sizeBytes, tier: s.riskTier,
                                  source: "review", selectable: true, safe: false))
+        }
+        for a in repos {
+            // Regenerable, but never auto-selected: deleting a project's deps
+            // means a reinstall/rebuild, so the user chooses these explicitly.
+            out.append(CleanItem(id: a.path, name: "\(a.kind) · \(a.project)",
+                                 detail: "In project “\(a.project)”. \(a.rebuildNote) Reversible.",
+                                 bytes: a.bytes, tier: .blue, source: "repo",
+                                 selectable: CleanupExecutor.isRemovable(a.path), safe: false,
+                                 isDirectory: true))
         }
         // De-dup by path (orphans already exclude recipe paths, but be safe).
         var seen = Set<String>()
