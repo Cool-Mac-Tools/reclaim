@@ -237,7 +237,8 @@ struct MyMacView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Totals reconcile to your disk's actual used space — the itemized "
                + "categories plus “System & Other” always add up to \(Fmt.bytes(report.usedBytes)).")
-            Text("Scanned \(report.totalFileCount.formatted()) files in "
+            Text("As of \(report.scannedAt.formatted(.relative(presentation: .named))) · "
+               + "\(report.totalFileCount.formatted()) files in "
                + "\(String(format: "%.1f", report.elapsedSeconds))s. Viewing only — "
                + "use the Scan tab to reclaim space safely.")
         }

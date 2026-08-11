@@ -213,8 +213,21 @@ final class AppModel: ObservableObject {
             // Remember the file count so the next scan's progress bar can fill
             // against a real target instead of guessing.
             UserDefaults.standard.set(report.totalFileCount, forKey: Self.lastFileCountKey)
+            // Persist the map so the tab opens instantly next launch.
+            await Task.detached { MapCache.save(report) }.value
             self.mapping = false
             self.hasMapped = true
+        }
+    }
+
+    /// Show the last saved map immediately on launch (marked with its age), so
+    /// My Mac isn't a blank "scan first" screen every time. A rescan re-measures
+    /// live; the cache is only a fast first paint.
+    func loadCachedMap() {
+        guard mapReport == nil, !mapping else { return }
+        if let cached = MapCache.load() {
+            mapReport = cached
+            hasMapped = true
         }
     }
 

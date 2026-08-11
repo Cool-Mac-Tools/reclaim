@@ -39,6 +39,7 @@ struct RootView: View {
         .task {
             model.loadQuarantine()
             model.refreshFDA()
+            model.loadCachedMap()
         }
         // Re-check when the user comes back from System Settings.
         .onReceive(NotificationCenter.default.publisher(

@@ -52,6 +52,9 @@ struct CategoryBrowser: View {
     @State private var sort: Sort = .largest
     @State private var sizeFilter: SizeFilter = .any
     @State private var ageFilter: AgeFilter = .any
+    @State private var searchText = ""
+    @State private var viewMode: ViewMode = .list
+    @State private var quickLook: PreviewItem?          // inline Quick Look sheet
     @State private var aiRequest: AppModel.AIRequest?   // this sheet presents its own AI popup
     @State private var showPhotoBrowser = false         // PhotoKit asset-level browser
 
@@ -60,10 +63,18 @@ struct CategoryBrowser: View {
         var id: String { rawValue }
     }
 
+    enum ViewMode: String, CaseIterable, Identifiable {
+        case list = "List", map = "Map"
+        var id: String { rawValue }
+        var symbol: String { self == .list ? "list.bullet" : "square.grid.2x2" }
+    }
+
     private var filtered: [ClusterFile] {
         let now = Date()
+        let query = searchText.trimmingCharacters(in: .whitespaces).lowercased()
         let matched = drill.files.filter {
             $0.bytes >= sizeFilter.minBytes && ageFilter.matches($0.modified, now: now)
+                && (query.isEmpty || ($0.path as NSString).lastPathComponent.lowercased().contains(query))
         }
         switch sort {
         case .largest: return matched.sorted { $0.bytes > $1.bytes }
@@ -107,9 +118,18 @@ struct CategoryBrowser: View {
             }
             Divider()
             if filtered.isEmpty {
-                ContentUnavailableView("Nothing matches these filters",
+                ContentUnavailableView("Nothing matches",
                     systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text("Loosen the size or age filter."))
+                    description: Text(searchText.isEmpty ? "Loosen the size or age filter." : "No files match “\(searchText)”."))
+                    .frame(maxHeight: .infinity)
+            } else if viewMode == .map {
+                TreemapView(
+                    files: filtered, tint: categoryColor(drill.id), selected: selected,
+                    isSelectable: removable,
+                    onToggle: { f in
+                        if selected.contains(f.path) { selected.remove(f.path) } else { selected.insert(f.path) }
+                    },
+                    onQuickLook: { f in quickLook = PreviewItem(path: f.path) })
                     .frame(maxHeight: .infinity)
             } else {
                 List(filtered) { file in
@@ -189,6 +209,22 @@ struct CategoryBrowser: View {
                     .buttonStyle(.link)
             }
 
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass").font(.caption).foregroundStyle(.tertiary)
+                TextField("Search", text: $searchText)
+                    .textFieldStyle(.plain).frame(width: 130)
+                if !searchText.isEmpty {
+                    Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.borderless).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(.quaternary.opacity(0.4), in: Capsule())
+
+            Picker("", selection: $viewMode) {
+                ForEach(ViewMode.allCases) { Image(systemName: $0.symbol).tag($0) }
+            }.pickerStyle(.segmented).frame(width: 78).labelsHidden()
+
             Spacer()
 
             Text("\(filtered.count) match · \(Fmt.bytes(filteredBytes))")
@@ -238,6 +274,10 @@ struct CategoryBrowser: View {
                 } label: { Image(systemName: "arrow.up.forward.app") }
                     .buttonStyle(.borderless).help("Open")
             }
+            if !bundle {
+                Button { quickLook = PreviewItem(path: file.path) } label: { Image(systemName: "eye") }
+                    .buttonStyle(.borderless).help("Quick Look")
+            }
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.path)])
             } label: { Image(systemName: "magnifyingglass") }
@@ -270,5 +310,8 @@ struct CategoryBrowser: View {
             .disabled(selected.isEmpty || model.busy != nil)
         }
         .padding(14)
+        // Hosted here (not on the root VStack) so it doesn't collide with the
+        // AI-explain or photo-browser sheets — one .sheet per view.
+        .sheet(item: $quickLook) { item in QuickLookSheet(item: item) }
     }
 }
