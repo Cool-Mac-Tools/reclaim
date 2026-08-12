@@ -31,7 +31,7 @@ struct ShareCard: View {
                     .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(Color(red: 0.4, green: 0.9, blue: 0.74))
                 Spacer()
-                Text("github.com/Claytonwendel/reclaim · free")
+                Text("reclaimac.com · free")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
             }
@@ -52,8 +52,9 @@ struct CelebrationView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var shareText: String {
-        "I just reclaimed \(Fmt.bytes(freed)) on my Mac with Reclaim — a free, explainable storage tool. github.com/Claytonwendel/reclaim"
+        "I just reclaimed \(Fmt.bytes(freed)) on my Mac with Reclaim — a free, explainable storage tool."
     }
+    private let shareURL = URL(string: "https://reclaimac.com")
 
     var body: some View {
         VStack(spacing: 20) {
@@ -91,7 +92,7 @@ struct CelebrationView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    ShareSheet.present(image: cardImage, text: shareText)
+                    ShareSheet.present(image: cardImage, text: shareText, url: shareURL)
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up").frame(minWidth: 96)
                 }
@@ -113,13 +114,16 @@ struct CelebrationView: View {
     }
 }
 
-/// Presents the macOS share sheet anchored to the key window.
+/// Presents the macOS share sheet anchored to the key window. Shares the card
+/// image, a short message, and the reclaimac.com link as a real URL item so
+/// targets (Messages, Mail, social) render a clickable link / preview.
 enum ShareSheet {
     @MainActor
-    static func present(image: NSImage?, text: String) {
+    static func present(image: NSImage?, text: String, url: URL? = nil) {
         var items: [Any] = []
         if let image { items.append(image) }
         items.append(text)
+        if let url { items.append(url) }
         let picker = NSSharingServicePicker(items: items)
         guard let view = NSApp.keyWindow?.contentView else { return }
         picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
