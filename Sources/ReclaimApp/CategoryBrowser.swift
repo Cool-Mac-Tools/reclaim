@@ -12,6 +12,9 @@ struct MyMacDrill: Identifiable {
     let categoryBytes: Int64  // total for the whole category (all files)
     let actionable: Bool
     let tier: RiskTier
+    /// Ledger source for anything cleaned from here — "my-mac" for a category,
+    /// or the originating recipe id when browsing a Reclaim finding's contents.
+    var source: String = "my-mac"
 
     /// Which categories a user may bulk-send to quarantine from My Mac. System,
     /// other-users, and applications are view-only — deleting individual files
@@ -36,6 +39,20 @@ struct MyMacDrill: Identifiable {
         self.categoryBytes = category.bytes
         self.actionable = Self.actionableKeys.contains(category.key)
         self.tier = Self.tier(for: category.key)
+    }
+
+    /// Browse the real files inside a Reclaim finding (a folder), reusing this
+    /// same rich browser instead of a raw folder tree.
+    init(id: String, name: String, symbol: String, files: [ClusterFile],
+         categoryBytes: Int64, tier: RiskTier, source: String) {
+        self.id = id
+        self.name = name
+        self.symbol = symbol
+        self.files = files
+        self.categoryBytes = categoryBytes
+        self.actionable = true
+        self.tier = tier
+        self.source = source
     }
 }
 
@@ -258,7 +275,7 @@ struct CategoryBrowser: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text((file.path as NSString).lastPathComponent).fontWeight(.medium).lineLimit(1)
                 Text(bundle ? "Library/app bundle — open to manage; not removed piece by piece"
-                            : dateLine(file))
+                            : infoLine(file))
                     .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
             }
             Spacer()
@@ -286,10 +303,19 @@ struct CategoryBrowser: View {
         .padding(.vertical, 2)
     }
 
-    private func dateLine(_ file: ClusterFile) -> String {
-        guard let d = file.modified else { return "date unknown" }
-        let days = Int(Date().timeIntervalSince(d) / 86400)
-        return "\(d.formatted(date: .abbreviated, time: .omitted)) · \(days) days ago"
+    /// "HEIF Image · Jan 12, 2024 · 590 days ago" — the file's kind (so an opaque
+    /// name still tells you what it is) plus its age.
+    private func infoLine(_ file: ClusterFile) -> String {
+        var parts: [String] = []
+        if let kind = (try? URL(fileURLWithPath: file.path)
+            .resourceValues(forKeys: [.localizedTypeDescriptionKey]))?.localizedTypeDescription {
+            parts.append(kind)
+        }
+        if let d = file.modified {
+            let days = Int(Date().timeIntervalSince(d) / 86400)
+            parts.append("\(d.formatted(date: .abbreviated, time: .omitted)) · \(days) days ago")
+        }
+        return parts.isEmpty ? "date unknown" : parts.joined(separator: " · ")
     }
 
     private var footer: some View {
@@ -300,7 +326,7 @@ struct CategoryBrowser: View {
             Button {
                 let targets = drill.files
                     .filter { selected.contains($0.path) && removable($0) }
-                    .map { CleanupTarget(path: $0.path, riskTier: drill.tier, source: "my-mac") }
+                    .map { CleanupTarget(path: $0.path, riskTier: drill.tier, source: drill.source) }
                 model.reclaim(targets)
                 dismiss()
             } label: {

@@ -233,9 +233,8 @@ struct CleanRow: View {
     let item: AppModel.CleanItem
     @Binding var isOn: Bool
     @State private var expanded = false
-    @State private var foldersOpen = false
-    @State private var children: [FileNode]?
-    @State private var loadingFolder = false
+    @State private var browse: MyMacDrill?
+    @State private var loadingBrowse = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -254,9 +253,16 @@ struct CleanRow: View {
                     Text(Fmt.bytes(item.bytes)).monospacedDigit().foregroundStyle(.secondary)
                     if ai.isReady { AISparkButton { model.explainItem(item) } }
                     if item.isDirectory {
-                        Button { toggleFolder() } label: {
-                            Image(systemName: foldersOpen ? "chevron.down" : "chevron.right").font(.caption)
-                        }.buttonStyle(.borderless).help("Expand to see and clean what's inside")
+                        Button { openBrowser() } label: {
+                            if loadingBrowse {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "rectangle.split.3x3").font(.caption)
+                            }
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Browse what's inside — previews, sizes, and dates")
+                        .disabled(loadingBrowse)
                     }
                 }
                 if expanded {
@@ -274,6 +280,10 @@ struct CleanRow: View {
                 HStack(spacing: 14) {
                     Button(expanded ? "Less" : "Why?") { expanded.toggle() }
                         .buttonStyle(.link).font(.caption)
+                    if item.isDirectory {
+                        Button("Browse contents") { openBrowser() }
+                            .buttonStyle(.link).font(.caption).disabled(loadingBrowse)
+                    }
                     if !item.selectable && !item.blockingApps.isEmpty {
                         Button("Quit \(item.blockingApps.joined(separator: " & ")) & Clean") {
                             model.quitAndClean(item)
@@ -281,39 +291,27 @@ struct CleanRow: View {
                         .buttonStyle(.link).font(.caption).disabled(model.busy != nil)
                     }
                 }
-                if foldersOpen { folderContents }
             }
         }
         .padding(.vertical, 2)
-    }
-
-    @ViewBuilder private var folderContents: some View {
-        if loadingFolder {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Reading folder…").font(.caption).foregroundStyle(.secondary)
-            }.padding(.leading, 4).padding(.top, 2)
-        } else if let children {
-            if children.isEmpty {
-                Text("Empty").font(.caption).foregroundStyle(.tertiary)
-            } else {
-                ExpandableNodeRows(nodes: children, depth: 0, tier: item.tier, source: item.source,
-                                   selected: $model.selected,
-                                   register: { model.registerNodes($0, tier: item.tier, source: item.source) },
-                                   aiRequest: $model.aiRequest)
-            }
+        .sheet(item: $browse) { d in
+            CategoryBrowser(drill: d).environmentObject(model).environmentObject(ai)
         }
     }
 
-    private func toggleFolder() {
-        foldersOpen.toggle()
-        guard foldersOpen, children == nil else { return }
-        loadingFolder = true
+    /// Load the real files inside this folder finding and open the rich browser
+    /// (thumbnails, Quick Look, search) — never the raw UUID folder tree.
+    private func openBrowser() {
+        guard !loadingBrowse else { return }
+        loadingBrowse = true
         Task {
-            let kids = await Task.detached(priority: .userInitiated) { DirLister.children(of: item.id) }.value
-            model.registerNodes(kids, tier: item.tier, source: item.source)
-            children = kids
-            loadingFolder = false
+            let files = await Task.detached(priority: .userInitiated) {
+                DirLister.deepFiles(of: item.id)
+            }.value
+            loadingBrowse = false
+            browse = MyMacDrill(
+                id: "finding", name: item.name, symbol: "folder",
+                files: files, categoryBytes: item.bytes, tier: item.tier, source: item.source)
         }
     }
 }

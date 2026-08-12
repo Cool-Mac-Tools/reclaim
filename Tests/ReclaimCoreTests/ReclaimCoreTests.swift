@@ -426,6 +426,26 @@ import Foundation
     }
 }
 
+@Suite struct DirListerTests {
+    @Test func deepFilesFlattensPastPlumbingToRealFiles() throws {
+        // Mimic Messages' layout: attachments buried under XX/YY/<UUID>/file.
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("deep-\(UUID().uuidString)")
+        let leafDir = root.appendingPathComponent("87/07/615038FA-90D5-4FE5-8469-EC38C2F44B5C")
+        try fm.createDirectory(at: leafDir, withIntermediateDirectories: true)
+        try Data(count: 200 * 1024).write(to: leafDir.appendingPathComponent("IMG_2634.heic"))
+        try Data(count: 120 * 1024).write(to: leafDir.appendingPathComponent("clip.mov"))
+
+        let files = DirLister.deepFiles(of: root.path, minBytes: 1024)
+        let names = files.map { ($0.path as NSString).lastPathComponent }
+        // We get the actual files, never the opaque UUID/intermediate folders.
+        #expect(names.contains("IMG_2634.heic"))
+        #expect(names.contains("clip.mov"))
+        #expect(!names.contains { $0.contains("615038FA") })
+        #expect(files.allSatisfy { DirLister.isDirectory($0.path) == false })
+    }
+}
+
 @Suite struct RepoScannerTests {
     @Test func detectsProjectArtifactsButNotStrayFolders() throws {
         let fm = FileManager.default
