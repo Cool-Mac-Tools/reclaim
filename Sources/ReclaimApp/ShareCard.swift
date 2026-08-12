@@ -57,9 +57,16 @@ struct CelebrationView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("🎉").font(.system(size: 54))
-                .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
-                .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6), value: appeared)
+            Group {
+                if let icon = CelebrationIcon.image {
+                    Image(nsImage: icon).resizable().interpolation(.high)
+                        .frame(width: 76, height: 76)
+                } else {
+                    Text("🎉").font(.system(size: 54))
+                }
+            }
+            .scaleEffect(appeared || reduceMotion ? 1 : 0.6)
+            .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6), value: appeared)
 
             VStack(spacing: 6) {
                 Text("Woohoo! You freed \(Fmt.bytes(freed)).")

@@ -426,6 +426,30 @@ import Foundation
     }
 }
 
+@Suite struct UnusedAppScannerTests {
+    @Test func flagsLongUnusedButNotRecentOrNewApps() {
+        let now = Date()
+        func daysAgo(_ d: Int) -> Date { now.addingTimeInterval(-Double(d) * 86400) }
+        let cutoff = 180
+
+        // Opened long ago → unused.
+        #expect(UnusedAppScanner.isUnused(lastUsed: daysAgo(300), installedAt: daysAgo(400), now: now, unusedDays: cutoff))
+        // Opened recently → keep.
+        #expect(!UnusedAppScanner.isUnused(lastUsed: daysAgo(10), installedAt: daysAgo(400), now: now, unusedDays: cutoff))
+        // Never opened but installed long ago → unused.
+        #expect(UnusedAppScanner.isUnused(lastUsed: nil, installedAt: daysAgo(300), now: now, unusedDays: cutoff))
+        // Never opened but freshly installed → don't nag.
+        #expect(!UnusedAppScanner.isUnused(lastUsed: nil, installedAt: daysAgo(5), now: now, unusedDays: cutoff))
+        // No dates at all → can't judge, don't flag.
+        #expect(!UnusedAppScanner.isUnused(lastUsed: nil, installedAt: nil, now: now, unusedDays: cutoff))
+    }
+
+    @Test func neverScansSystemApplications() {
+        // Sealed Apple apps must never be candidates.
+        #expect(!UnusedAppScanner.appDirs(home: "/Users/x").contains("/System/Applications"))
+    }
+}
+
 @Suite struct DirListerTests {
     @Test func deepFilesFlattensPastPlumbingToRealFiles() throws {
         // Mimic Messages' layout: attachments buried under XX/YY/<UUID>/file.

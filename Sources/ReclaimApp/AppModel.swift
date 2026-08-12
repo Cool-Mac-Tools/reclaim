@@ -38,6 +38,8 @@ final class AppModel: ObservableObject {
     @Published var review: JudgmentReport?
     /// Project build artifacts (node_modules, .next, target…) found repo-aware.
     @Published var repos: [RepoArtifact] = []
+    /// Installed apps the user hasn't opened in a long time.
+    @Published var unusedApps: [UnusedApp] = []
     @Published var freeBytes: Int64 = 0
     @Published var totalBytes: Int64 = 0
     /// Tool binaries found on this Mac (npm, brew…) — gates the CLI cleanups.
@@ -153,13 +155,14 @@ final class AppModel: ObservableObject {
         let detail: String        // plain-language rationale
         let bytes: Int64
         let tier: RiskTier
-        let source: String        // recipe id / "orphan" / "review"
+        let source: String        // recipe id / "orphan" / "review" / "unused-app"
         let selectable: Bool      // false for Red, running apps, info-only rows
         let safe: Bool            // part of the pre-selected one-click set
         var blockingApps: [String] = []  // running apps that block this item
         var impact: String = ""          // what deletion changes / re-downloads
         var recurrence: String = ""      // whether it grows back
         var isDirectory: Bool = false    // can be expanded to reveal contents
+        var subtitle: String = ""        // inline secondary line (e.g. last-used)
     }
 
     /// A child target discovered by expanding a folder — registered so the
@@ -203,14 +206,16 @@ final class AppModel: ObservableObject {
         mapMac()
         scanning = true
         hasScanned = false
-        scanReport = nil; orphans = []; review = nil; repos = []; selected = []; extraTargets = [:]
+        scanReport = nil; orphans = []; review = nil; repos = []; unusedApps = []
+        selected = []; extraTargets = [:]
 
         Task {
             async let scan = Self.doScan()
             async let orph = Self.doOrphans()
             async let rev  = Self.doReview()
             async let rp   = Self.doRepos()
-            let (s, o, r, rpo) = await (scan, orph, rev, rp)
+            async let ua   = Self.doUnusedApps()
+            let (s, o, r, rpo, uap) = await (scan, orph, rev, rp, ua)
             // Which tool commands are actually usable — resolved via the login
             // shell so nvm/pyenv/Homebrew paths are found.
             let neededTools = Set(s.findings
@@ -222,6 +227,7 @@ final class AppModel: ObservableObject {
             self.orphans = o
             self.review = r
             self.repos = rpo
+            self.unusedApps = uap
             self.availableTools = avail
             self.freeBytes = s.volumeFreeBytes
             self.totalBytes = s.volumeTotalBytes
@@ -286,6 +292,9 @@ final class AppModel: ObservableObject {
     private nonisolated static func doRepos() async -> [RepoArtifact] {
         await Task.detached(priority: .userInitiated) { RepoScanner().scan() }.value
     }
+    private nonisolated static func doUnusedApps() async -> [UnusedApp] {
+        await Task.detached(priority: .userInitiated) { UnusedAppScanner().scan() }.value
+    }
 
     /// The merged, de-duplicated results list.
     var items: [CleanItem] {
@@ -334,6 +343,16 @@ final class AppModel: ObservableObject {
                                  bytes: a.bytes, tier: .blue, source: "repo",
                                  selectable: CleanupExecutor.isRemovable(a.path), safe: false,
                                  isDirectory: true))
+        }
+        for a in unusedApps {
+            // "You don't use this" — a personal call, never auto-selected.
+            // Deleting moves the whole .app to quarantine (reversible); it's a
+            // bundle, so no piece-by-piece browsing.
+            out.append(CleanItem(id: a.path, name: a.name,
+                                 detail: a.rationale(), bytes: a.bytes, tier: .orange,
+                                 source: "unused-app",
+                                 selectable: CleanupExecutor.isRemovable(a.path), safe: false,
+                                 isDirectory: false, subtitle: a.subtitle()))
         }
         // De-dup by path (orphans already exclude recipe paths, but be safe).
         var seen = Set<String>()

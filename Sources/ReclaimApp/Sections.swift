@@ -80,10 +80,12 @@ struct ScanView: View {
                 Section { hero.listRowSeparator(.hidden) }
 
                 let safe = model.items.filter(\.safe)
+                // Unused apps get their own "you don't use this" section.
+                let unused = model.items.filter { $0.source == "unused-app" }
                 // "Review" now includes anything blocked by a running app — its
                 // reclaimable value shouldn't hide in a side section. Only truly
                 // protected (Red) items are split out.
-                let review = model.items.filter { !$0.safe && $0.tier != .red }
+                let review = model.items.filter { !$0.safe && $0.tier != .red && $0.source != "unused-app" }
                 let protectedItems = model.items.filter { $0.tier == .red }
 
                 if !safe.isEmpty {
@@ -119,6 +121,12 @@ struct ScanView: View {
                         ForEach(review) { row($0) }
                     } header: { groupHeader("More to review", "History and personal files — plus anything an open app is using. We explain each; you decide.", review) }
                         footer: { Text("Rows with a pause icon are in use by an app you have open — quit it and hit Rescan to clean them. Reclaim won't clear data out from under a running app.") }
+                }
+                if !unused.isEmpty {
+                    Section {
+                        ForEach(unused) { row($0) }
+                    } header: { groupHeader("You probably don't use these", "Apps you haven't opened in a long time. Removing one is reversible — it moves to quarantine. You decide.", unused) }
+                        footer: { Text("Based on when each app was last opened. An app you actually use won't show here.") }
                 }
                 if !protectedItems.isEmpty {
                     Section {
@@ -264,6 +272,9 @@ struct CleanRow: View {
                         .help("Browse what's inside — previews, sizes, and dates")
                         .disabled(loadingBrowse)
                     }
+                }
+                if !item.subtitle.isEmpty {
+                    Text(item.subtitle).font(.caption).foregroundStyle(.secondary)
                 }
                 if expanded {
                     Text(item.detail).font(.callout).foregroundStyle(.secondary)
