@@ -7,7 +7,7 @@
   <title>Reclaim — Mac Storage Cleaner That Explains Every Gigabyte</title>
   <link rel="icon" type="image/png" sizes="48x48" href="assets/favicon.png">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="css/styles.css?v=20260729">
+  <link rel="stylesheet" href="css/styles.css?v=20260815">
   <link rel="canonical" href="https://reclaimac.com/">
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#ffffff">
@@ -74,22 +74,9 @@
         <a class="link-more" style="color:#0071e3" href="reclaim/index.html">See how it works</a>
       </div>
       <div class="tile-visual" style="align-items:center">
-        <!-- Live-looking scan dashboard mock (swap for a real screenshot later) -->
-        <div class="scan-mock" aria-hidden="true">
-          <div class="scan-mock-bar"><i></i><i></i><i></i><span>Reclaim — Scan complete · 2.6s</span></div>
-          <div class="scan-summary">
-            <div class="scan-card"><div class="label">Recoverable now</div><div class="value green">18.4 GB</div></div>
-            <div class="scan-card"><div class="label">Review for more</div><div class="value amber">31.2 GB</div></div>
-            <div class="scan-card"><div class="label">Free space</div><div class="value blue">90 GB</div></div>
-          </div>
-          <div class="scan-rows">
-            <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Xcode DerivedData &amp; previews</span><span class="size">13.0 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">npm &amp; Docker caches</span><span class="size">9.2 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Leftovers from uninstalled apps</span><span class="size">4.1 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-yellow"></span><span class="name">Cursor chat history · won't reopen if removed</span><span class="size">12.4 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Old Messages attachments · iCloud-synced</span><span class="size">2.4 GB</span></div>
-          </div>
-        </div>
+        <img class="app-shot app-shot-hero" src="assets/shots/reclaim-scan.webp"
+             alt="Reclaim's main tab after a scan — findings grouped into Safe to clean and More to review, each with a size and a colored safety tier."
+             loading="eager">
       </div>
     </div>
 
@@ -104,12 +91,9 @@
         </div>
       </div>
       <div class="tile-feature-visual">
-        <div class="scan-mock" style="max-width:440px;width:100%" aria-hidden="true">
-          <div class="scan-mock-bar"><i></i><i></i><i></i><span>✨ Ask Reclaim</span></div>
-          <div style="padding:20px 22px">
-            <p style="font-size:14px;color:#6e6e73;line-height:1.55;margin:0"><strong style="color:#1d1d1f">com.spotify.client · 3.4 GB.</strong> Spotify's offline-song &amp; image cache. Spotify is still installed, so it re-downloads what you play. Safe to clear — won't touch playlists or your account.</p>
-          </div>
-        </div>
+        <img class="app-shot" style="max-width:460px" src="assets/shots/ai-explain.webp"
+             alt="Reclaim's AI explanation answering, in plain language, what a finding is and whether it's safe to delete."
+             loading="lazy">
       </div>
     </a>
 
@@ -124,14 +108,9 @@
         </div>
       </div>
       <div class="tile-feature-visual">
-        <div class="scan-mock" style="max-width:440px;width:100%" aria-hidden="true">
-          <div class="scan-rows" style="padding:16px 12px">
-            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Applications</span><span class="size">42.1 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Photos library</span><span class="size">28.7 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Developer &amp; caches</span><span class="size">19.3 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-red"></span><span class="name">macOS System &amp; Snapshots</span><span class="size">24.0 GB</span></div>
-          </div>
-        </div>
+        <img class="app-shot" style="max-width:460px" src="assets/shots/my-mac.webp"
+             alt="Reclaim's My Mac tab — a whole-disk breakdown by category that reconciles exactly to the real used space, with a capacity bar."
+             loading="lazy">
       </div>
     </a>
 
@@ -184,12 +163,9 @@
       <p class="subhead subhead-light">Everything goes to a<br>quarantine you can undo.</p>
       <div class="cta-row"><span class="link-more" style="color:#2997ff">Learn more</span></div>
       <div class="tile-visual" style="align-items:center">
-        <div class="scan-mock scan-mock-dark" style="max-width:400px;background:rgba(40,40,42,0.82);border-color:rgba(255,255,255,0.1)" aria-hidden="true">
-          <div style="padding:24px 22px;color:#f5f5f7">
-            <div style="font-size:15px;font-weight:600;margin-bottom:6px">Quarantined 18.4 GB · session 20260721</div>
-            <div style="font-size:13px;color:#a1a1a6;line-height:1.5">Nothing was deleted. Moved to a reversible vault. Undo anytime — or purge when you're sure.</div>
-          </div>
-        </div>
+        <img class="app-shot" style="max-width:420px" src="assets/shots/quarantine.webp"
+             alt="Reclaim's Quarantine tab — cleaned items held in a reversible vault you can restore anytime or empty when you're sure."
+             loading="lazy">
       </div>
     </a>
 
@@ -213,12 +189,9 @@
       <p class="subhead">See the space you<br>actually got back.</p>
       <div class="cta-row"><span class="link-more">Learn more</span></div>
       <div class="tile-visual" style="align-items:center">
-        <div class="scan-mock" style="max-width:400px" aria-hidden="true">
-          <div style="padding:22px">
-            <div style="font-size:34px;font-weight:700;letter-spacing:-0.03em;color:#1a9d47">+18.4 GB free</div>
-            <div style="font-size:13px;color:#6e6e73;margin-top:6px;line-height:1.5">Verified by a rescan. 11 items removed, 0 errors. No projects or personal photos touched.</div>
-          </div>
-        </div>
+        <img class="app-shot" style="max-width:420px" src="assets/shots/history.webp"
+             alt="Reclaim's History tab — lifetime space reclaimed, this month's total, and a chart of recent cleanup sessions."
+             loading="lazy">
       </div>
     </a>
   </section>

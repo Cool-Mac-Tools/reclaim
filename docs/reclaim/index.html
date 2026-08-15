@@ -7,7 +7,7 @@
   <title>Reclaim — Mac Storage Cleaner for Developers</title>
   <link rel="icon" type="image/png" sizes="48x48" href="../assets/favicon.png">
   <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="../css/styles.css?v=20260729">
+  <link rel="stylesheet" href="../css/styles.css?v=20260815">
   <link rel="canonical" href="https://reclaimac.com/reclaim/">
   <meta name="theme-color" content="#ffffff">
   <meta property="og:type" content="website">
@@ -68,21 +68,9 @@
       <a class="link-more" style="color:#0071e3" href="#download">Download</a>
     </div>
     <div class="hero-visual">
-      <div class="scan-mock fade-in" aria-hidden="true" style="max-width:520px;width:100%">
-        <div class="scan-mock-bar"><i></i><i></i><i></i><span>Reclaim — Scan complete · 2.6s</span></div>
-        <div class="scan-summary">
-          <div class="scan-card"><div class="label">Recoverable now</div><div class="value green">18.4 GB</div></div>
-          <div class="scan-card"><div class="label">Review for more</div><div class="value amber">31.2 GB</div></div>
-          <div class="scan-card"><div class="label">Free space</div><div class="value blue">90 GB</div></div>
-        </div>
-        <div class="scan-rows">
-          <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Xcode DerivedData &amp; previews</span><span class="size">13.0 GB</span></div>
-          <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">npm &amp; Docker caches</span><span class="size">9.2 GB</span></div>
-          <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Leftovers from uninstalled apps</span><span class="size">4.1 GB</span></div>
-          <div class="scan-row"><span class="tier-dot tier-yellow"></span><span class="name">Cursor chat history · won't reopen if removed</span><span class="size">12.4 GB</span></div>
-          <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Old Messages attachments · iCloud-synced</span><span class="size">2.4 GB</span></div>
-        </div>
-      </div>
+      <img class="app-shot app-shot-hero fade-in" src="../assets/shots/reclaim-scan.webp"
+           alt="Reclaim's main tab after a scan — findings grouped into Safe to clean and More to review, each with a size and a colored safety tier."
+           loading="eager">
     </div>
   </section>
 
@@ -94,6 +82,7 @@
     <ul class="tab-list" role="tablist">
       <li><button type="button" class="active" data-tab-button="scan" role="tab">Scan</button></li>
       <li><button type="button" data-tab-button="mymac" role="tab">My Mac</button></li>
+      <li><button type="button" data-tab-button="activity" role="tab">Activity</button></li>
       <li><button type="button" data-tab-button="orphans" role="tab">Orphans</button></li>
       <li><button type="button" data-tab-button="duplicates" role="tab">Duplicates</button></li>
       <li><button type="button" data-tab-button="review" role="tab">Review</button></li>
@@ -112,20 +101,9 @@
         <a class="link-more" style="color:#0071e3" href="#download">Download Reclaim</a>
       </div>
       <div class="tab-panel-visual">
-        <div class="scan-mock" aria-hidden="true" style="max-width:440px;width:100%">
-          <div class="scan-mock-bar"><i></i><i></i><i></i><span>Xcode Preview Data</span></div>
-          <div style="padding:20px 22px">
-            <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
-              <span class="tier-dot tier-green"></span>
-              <strong style="font-size:17px">13.0 GB · Safe to rebuild</strong>
-            </div>
-            <p style="font-size:14px;color:#6e6e73;line-height:1.5;margin:0">Generated SwiftUI previews from past sessions. Xcode isn't running. Deleting this won't touch source code, archives, or signing profiles. Previews rebuild when you use them again.</p>
-            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-              <span class="chip active" style="padding:6px 13px">Quarantine (reversible)</span>
-              <span class="chip" style="padding:6px 13px">Why is this here?</span>
-            </div>
-          </div>
-        </div>
+        <img class="app-shot" src="../assets/shots/reclaim-scan.webp"
+             alt="Reclaim's scan results — each finding shows its size, safety tier, and a plain-language explanation you can expand."
+             loading="lazy">
       </div>
     </div>
 
@@ -138,15 +116,24 @@
         <p>That opaque bucket gets itemized into Protected Data, macOS System, System Update Files, Virtual Memory, and residual snapshots — so nothing is a mystery. Big bundles like Photo libraries and apps stay whole, never carved up.</p>
       </div>
       <div class="tab-panel-visual">
-        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
-          <div class="scan-rows" style="padding:16px 12px">
-            <div class="scan-row"><span class="tier-dot tier-blue"></span><span class="name">Applications</span><span class="size">42.1 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Photos library</span><span class="size">28.7 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-green"></span><span class="name">Developer &amp; caches</span><span class="size">19.3 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-red"></span><span class="name">macOS System &amp; Snapshots</span><span class="size">24.0 GB</span></div>
-            <div class="scan-row"><span class="tier-dot tier-orange"></span><span class="name">Documents &amp; Downloads</span><span class="size">11.2 GB</span></div>
-          </div>
-        </div>
+        <img class="app-shot" src="../assets/shots/my-mac.webp"
+             alt="Reclaim's My Mac tab — a whole-disk breakdown by category with a capacity bar, reconciled exactly to the real used space."
+             loading="lazy">
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="activity" id="activity">
+      <div class="tab-panel-copy">
+        <p class="eyebrow">Activity</p>
+        <h2>Why is your Mac<br>slow right now?</h2>
+        <p>A live look at what's running and what's dragging your Mac down — memory pressure, swap, CPU load, thermal throttling, a runaway process, or a startup that's grown too heavy. Each is explained in plain language, not jargon.</p>
+        <h3>Fix it in a click.</h3>
+        <p>Quit a memory-hungry app right from the list — or, when a full disk is the culprit, jump straight to reclaiming space.</p>
+      </div>
+      <div class="tab-panel-visual">
+        <img class="app-shot" src="../assets/shots/activity.webp"
+             alt="Reclaim's Activity tab — a health verdict, memory/CPU/disk stats, plain-language reasons the Mac is slow, and the top processes each with a Quit button."
+             loading="lazy">
       </div>
     </div>
 
@@ -213,12 +200,9 @@
         <p>Empty the quarantine and Reclaim shows a shareable card — "Woohoo! You freed 18.4 GB" — ready to send.</p>
       </div>
       <div class="tab-panel-visual">
-        <div class="scan-mock scan-mock-dark" aria-hidden="true" style="max-width:420px;width:100%;background:rgba(40,40,42,0.9);border-color:rgba(255,255,255,0.1)">
-          <div style="padding:24px 22px;color:#f5f5f7">
-            <div style="font-size:15px;font-weight:600;margin-bottom:6px">Quarantined 18.4 GB · session 20260728</div>
-            <div style="font-size:13px;color:#a1a1a6;line-height:1.5">Nothing was deleted. Moved to a reversible vault. Restore anytime — or purge when you're sure.</div>
-          </div>
-        </div>
+        <img class="app-shot" src="../assets/shots/quarantine.webp"
+             alt="Reclaim's Quarantine tab — cleaned items held in a reversible vault you can restore anytime or empty when you're sure."
+             loading="lazy">
       </div>
     </div>
 
@@ -231,12 +215,9 @@
         <p>No guessing whether it "did anything" — the numbers are always there.</p>
       </div>
       <div class="tab-panel-visual">
-        <div class="scan-mock" aria-hidden="true" style="max-width:420px;width:100%">
-          <div style="padding:22px">
-            <div style="font-size:34px;font-weight:700;letter-spacing:-0.03em;color:#1a9d47">142 GB</div>
-            <div style="font-size:13px;color:#6e6e73;margin-top:6px;line-height:1.5">reclaimed lifetime · 23 GB this month across 6 cleanups</div>
-          </div>
-        </div>
+        <img class="app-shot" src="../assets/shots/history.webp"
+             alt="Reclaim's History tab — lifetime space reclaimed, this month's total, and a chart of recent cleanup sessions."
+             loading="lazy">
       </div>
     </div>
 
@@ -290,12 +271,9 @@
           <h3>"What is this,<br>and can I delete it?"</h3>
           <p>Connect an AI provider and a ✨ button appears next to items in Scan and My Mac. Click it and Reclaim explains what a finding is and whether it's safe to remove — grounded in the real details of that item, never inventing a deletion.</p>
         </div>
-        <div class="scan-mock" aria-hidden="true" style="width:100%">
-          <div class="scan-mock-bar"><i></i><i></i><i></i><span>✨ Ask Reclaim</span></div>
-          <div style="padding:20px 22px">
-            <p style="font-size:14px;color:#6e6e73;line-height:1.55;margin:0"><strong style="color:#1d1d1f">com.spotify.client · 3.4 GB.</strong> This is Spotify's offline-song and image cache. Spotify is still installed, so it will simply re-download what you play again. Safe to clear — it won't touch your playlists or account.</p>
-          </div>
-        </div>
+        <img class="app-shot" src="../assets/shots/ai-explain.webp"
+             alt="Reclaim's AI explaining, in plain language, what a finding is and whether it's safe to delete — grounded in the item's real details."
+             loading="lazy">
       </article>
       <article class="showcase-card fade-in">
         <div class="showcase-copy">
@@ -303,13 +281,9 @@
           <h3>Your AI.<br>Your model. Your bill.</h3>
           <p>Use your own OpenAI, Anthropic, or Google key and pick any model — from cheapest-and-fastest to most capable. Your key is stored in the macOS Keychain and requests go straight to the provider you chose. Nothing runs through us, and it's completely optional.</p>
         </div>
-        <div class="scan-mock" aria-hidden="true" style="width:100%">
-          <div style="padding:22px;display:flex;gap:8px;flex-wrap:wrap">
-            <span class="chip active" style="padding:8px 15px">Anthropic — Claude</span>
-            <span class="chip" style="padding:8px 15px">OpenAI — GPT</span>
-            <span class="chip" style="padding:8px 15px">Google — Gemini</span>
-          </div>
-        </div>
+        <img class="app-shot" src="../assets/shots/ai-setup.webp"
+             alt="Reclaim's AI setup — connect your own OpenAI, Anthropic, or Google key and pick a model; the key stays in your macOS Keychain."
+             loading="lazy">
       </article>
     </div>
   </section>

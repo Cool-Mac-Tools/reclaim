@@ -1527,3 +1527,19 @@ body.menu-open { overflow: hidden; }
   .scan-row { font-size: 12px; gap: 9px; padding: 8px 10px; }
   .scan-row .size { font-size: 12px; }
 }
+
+/* ── Real product screenshots (replaces the CSS scan-mocks) ─────────── */
+.app-shot {
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  background: #fff;
+}
+.app-shot-hero { max-width: 860px; margin: 0 auto; }
+/* On dark tiles, lift the frame off the background. */
+.tile-dark .app-shot { border-color: rgba(255, 255, 255, 0.12); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5); }
+@media (max-width: 734px) {
+  .app-shot { border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16); }
+}
