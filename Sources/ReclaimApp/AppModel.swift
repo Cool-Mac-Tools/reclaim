@@ -11,11 +11,11 @@ final class AppModel: ObservableObject {
     enum Section: String, CaseIterable, Identifiable {
         case scan       = "Reclaim"
         case myMac      = "My Mac"
-        case workspace  = "Workspace"
         case activity   = "Activity"
         case quarantine = "Quarantine"
         case history    = "History"
         case ai         = "AI"
+        case workspace  = "Workspace"
         var id: String { rawValue }
         var symbol: String {
             switch self {

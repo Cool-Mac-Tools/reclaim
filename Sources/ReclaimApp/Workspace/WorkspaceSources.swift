@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import ApplicationServices
 import CoreServices
+import CoreGraphics
 import ReclaimCore
 
 struct WorkspaceAppSnapshot: Sendable {
@@ -16,7 +17,8 @@ struct WorkspaceAppSnapshot: Sendable {
 /// pixels, terminal contents, password fields, or browser history databases.
 enum WorkspaceSources {
     static func apps(_ apps: [WorkspaceAppSnapshot], health: SystemHealth) -> [WorkspaceObject] {
-        apps.map { app in
+        let counts = windowCounts()
+        return apps.map { app in
             let processes = health.processes.filter {
                 $0.pid == app.pid || (app.path.map { $0.hasSuffix(".app") && $0.count > 1 && $0 != "/" }
                     == true && $0.path.hasPrefix((app.path ?? "") + "/"))
@@ -24,11 +26,42 @@ enum WorkspaceSources {
             let cpu = processes.reduce(0) { $0 + $1.cpuPercent }
             let memory = processes.reduce(0) { $0 + $1.memoryBytes }
             return WorkspaceObject(id: "app:\(app.pid)", kind: .app, title: app.name,
-                detail: "\(String(format: "%.1f", cpu))% CPU · \(ByteFormatter.string(memory)) memory",
+                detail: "\(counts[app.pid] ?? 0) \(counts[app.pid] == 1 ? "window" : "windows") · \(String(format: "%.1f", cpu))% CPU · \(ByteFormatter.string(memory))",
                 source: "macOS running applications", state: app.focused ? .active : .idle,
                 pid: app.pid, path: app.path, cpu: cpu, memory: memory,
                 timestamp: health.sampledAt, focused: app.focused)
         }
+    }
+    static let terminalIDs: Set<String> = ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty"]
+    private static func windowCounts() -> [Int32: Int] {
+        // Owner/layer/bounds are ordinary window metadata. Do not request screen
+        // recording or inspect pixels/names through this API.
+        let list = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        var counts: [Int32: Int] = [:]
+        for window in list {
+            guard let pid = window[kCGWindowOwnerPID as String] as? Int32,
+                  let layer = window[kCGWindowLayer as String] as? Int, layer == 0,
+                  let rawBounds = window[kCGWindowBounds as String] as? [String: Any],
+                  let bounds = CGRect(dictionaryRepresentation: rawBounds as CFDictionary), bounds.width > 80, bounds.height > 50 else { continue }
+            counts[pid, default: 0] += 1
+        }
+        return counts
+    }
+    static func tools(_ apps: [WorkspaceAppSnapshot], health: SystemHealth, windows: [WorkspaceObject]) -> [WorkspaceObject] {
+        var rows: [WorkspaceObject] = []
+        for app in apps where terminalIDs.contains(app.bundleID) && !windows.contains(where: { $0.pid == app.pid && $0.kind == .terminal }) {
+            rows.append(WorkspaceObject(id: "terminal:\(app.pid)", kind: .terminal, title: app.name,
+                detail: "Running · enable window details for session titles", source: "macOS running applications", pid: app.pid, timestamp: health.sampledAt))
+        }
+        for process in health.processes {
+            guard let kind = WorkspaceProcess.kind(executable: process.path) else { continue }
+            let executable = (process.path as NSString).lastPathComponent
+            rows.append(WorkspaceObject(id: "process:\(process.pid)", kind: kind, title: "\(executable) · \(process.pid)",
+                detail: "Process running · \(String(format: "%.1f", process.cpuPercent))% CPU · PID \(process.pid)",
+                source: "Observed executable · actions require a tool connection", state: .active,
+                path: process.path, cpu: process.cpuPercent, memory: process.memoryBytes, timestamp: health.sampledAt))
+        }
+        return rows
     }
     static func windows(_ apps: [WorkspaceAppSnapshot]) -> [WorkspaceObject] {
         var objects: [WorkspaceObject] = []
@@ -40,8 +73,7 @@ enum WorkspaceSources {
             var raw: CFTypeRef?
             guard AXUIElementCopyAttributeValue(element, kAXWindowsAttribute as CFString, &raw) == .success,
                   let windows = raw as? [AXUIElement] else { continue }
-            let terminal = ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable",
-                            "com.mitchellh.ghostty"].contains(app.bundleID)
+            let terminal = terminalIDs.contains(app.bundleID)
             for (index, window) in windows.prefix(8).enumerated() {
                 if Date() >= deadline { break }
                 AXUIElementSetMessagingTimeout(window, 0.08)
@@ -120,6 +152,7 @@ enum WorkspaceSources {
 /// The watcher owns the stream until stop/deinit, and callbacks only carry strings.
 final class WorkspaceFileWatcher: @unchecked Sendable {
     private var stream: FSEventStreamRef?
+    var isActive: Bool { stream != nil }
     private let queue = DispatchQueue(label: "com.reclaim.workspace.files", qos: .utility)
     private let receive: @Sendable ([String]) -> Void
     init(url: URL, receive: @escaping @Sendable ([String]) -> Void) {

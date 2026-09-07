@@ -50,8 +50,10 @@ struct WorkspaceScene: NSViewRepresentable {
     }
     func updateNSView(_ view: SCNView, context: Context) {
         context.coordinator.select = select
+        let focusChanged = context.coordinator.focus != focus
+        context.coordinator.focus = focus
         context.coordinator.update(objects, selected: selectedID, reduceMotion: reduceMotion)
-        if context.coordinator.resetToken != resetToken || context.coordinator.focus != focus {
+        if context.coordinator.resetToken != resetToken || focusChanged {
             context.coordinator.resetToken = resetToken
             context.coordinator.focus = focus
             view.pointOfView = context.coordinator.camera
@@ -70,6 +72,8 @@ struct WorkspaceScene: NSViewRepresentable {
         private var slots: [String: Int] = [:]
         private var lastSelection: String?
         private var emptyLabels: [WorkspaceKind: SCNNode] = [:]
+        private var zoneNodes: [WorkspaceKind: [SCNNode]] = [:]
+        private var activeKinds: Set<WorkspaceKind> = []
         private let centers: [WorkspaceKind: SCNVector3] = [
             .app: SCNVector3(-7, 0, -4), .tab: SCNVector3(0, 0, -6),
             .file: SCNVector3(7, 0, -4), .terminal: SCNVector3(-7, 0, 4),
@@ -97,6 +101,7 @@ struct WorkspaceScene: NSViewRepresentable {
             let foot = SCNNode(geometry: SCNBox(width: 1.6, height: 0.12, length: 0.75, chamferRadius: 0.08))
             foot.geometry?.firstMaterial?.diffuse.contents = NSColor.gray
             foot.position = SCNVector3(0, 0.12, -0.25); scene.rootNode.addChildNode(foot)
+            zoneNodes[.storage] = [stand, foot]
             for x in stride(from: -11.0, through: 11.0, by: 1.0) {
                 addLine(SCNVector3(x, -0.135, -9), SCNVector3(x, -0.135, 9), color: NSColor.white.withAlphaComponent(0.045))
             }
@@ -110,6 +115,7 @@ struct WorkspaceScene: NSViewRepresentable {
                 base.firstMaterial?.diffuse.contents = kind.tint.withAlphaComponent(0.10)
                 let node = SCNNode(geometry: base); node.position = center
                 scene.rootNode.addChildNode(node)
+                zoneNodes[kind, default: []].append(node)
                 let label = SCNText(string: kind == .storage ? "MY MAC" : kind.title.uppercased(), extrusionDepth: 0)
                 label.font = .systemFont(ofSize: 0.28, weight: .semibold)
                 label.firstMaterial?.diffuse.contents = kind.tint
@@ -118,36 +124,63 @@ struct WorkspaceScene: NSViewRepresentable {
                 text.position = SCNVector3(center.x - 2.4, 0.09, center.z + 1.65)
                 if kind == .storage { text.position.x = -1.1; text.position.z = 1.15 }
                 scene.rootNode.addChildNode(text)
+                zoneNodes[kind, default: []].append(text)
                 if kind != .storage {
-                    let caption = SCNText(string: "No connected objects", extrusionDepth: 0)
+                    let caption = SCNText(string: "Connect a source above", extrusionDepth: 0)
                     caption.font = .systemFont(ofSize: 0.25)
                     caption.firstMaterial?.diffuse.contents = kind.tint.withAlphaComponent(0.5)
                     let empty = SCNNode(geometry: caption)
                     empty.eulerAngles.x = -.pi / 2
                     empty.position = SCNVector3(center.x - 1.8, 0.09, center.z)
                     scene.rootNode.addChildNode(empty); emptyLabels[kind] = empty
+                    zoneNodes[kind, default: []].append(empty)
                 }
-                if kind != .storage { addLine(SCNVector3(0, -0.09, 0), center, color: kind.tint.withAlphaComponent(0.25)) }
+                if kind != .storage {
+                    let line = addLine(SCNVector3(0, -0.09, 0), center, color: kind.tint.withAlphaComponent(0.25))
+                    zoneNodes[kind, default: []].append(line)
+                }
             }
         }
         func home() {
-            let target = focus.flatMap { centers[$0] } ?? SCNVector3Zero
-            camera.position = focus == nil ? SCNVector3(10, 14, 18) : SCNVector3(target.x + 1.5, 5.5, target.z + 8)
-            let aim = SCNVector3(target.x, focus == nil ? 0 : 1.2, target.z)
-            camera.look(at: aim)
-            view?.defaultCameraController.target = aim
+            view?.defaultCameraController.stopInertia()
+            if let focus, let target = centers[focus] {
+                camera.position = SCNVector3(target.x + 1, 5, target.z + (focus == .storage ? 5 : 8))
+                let aim = SCNVector3(target.x, 1.2, target.z)
+                camera.look(at: aim); view?.defaultCameraController.target = aim
+            } else {
+                let points = activeKinds.compactMap { centers[$0] }
+                let minX = points.map(\.x).min() ?? -7, maxX = points.map(\.x).max() ?? 7
+                let minZ = points.map(\.z).min() ?? -4, maxZ = points.map(\.z).max() ?? 4
+                let span = max(maxX - minX + 7, maxZ - minZ + 6)
+                let target = SCNVector3((minX + maxX) / 2, 1, (minZ + maxZ) / 2)
+                camera.position = SCNVector3(target.x + 2, Double(span) * 0.64, target.z + span * 0.91)
+                camera.look(at: target); view?.defaultCameraController.target = target
+            }
+            view?.pointOfView = camera
+            view?.needsDisplay = true
         }
         func update(_ objects: [WorkspaceObject], selected: String?, reduceMotion: Bool) {
             // Keep the scene legible; every object remains available in the list.
             let shown = WorkspaceKind.allCases.flatMap { kind in
-                let group = objects.filter { $0.kind == kind }.sorted { $0.id < $1.id }
+                let group = objects.filter { $0.kind == kind }.sorted {
+                    if $0.focused != $1.focused { return $0.focused }
+                    if ($0.state == .active) != ($1.state == .active) { return $0.state == .active }
+                    return $0.id < $1.id
+                }
                 var visible = Array(group.prefix(kind == .storage ? 1 : 12))
                 if let selected, let chosen = group.first(where: { $0.id == selected }), !visible.contains(where: { $0.id == selected }) {
                     visible.removeLast(); visible.append(chosen)
                 }
                 return visible
             }
-            for (kind, label) in emptyLabels { label.isHidden = objects.contains { $0.kind == kind } }
+            let kinds = Set(objects.map(\.kind))
+            let changed = kinds != activeKinds
+            activeKinds = kinds
+            for (kind, zone) in zoneNodes {
+                let visible = focus.map { $0 == kind } ?? kinds.contains(kind)
+                zone.forEach { $0.isHidden = !visible }
+                emptyLabels[kind]?.isHidden = !visible || kinds.contains(kind)
+            }
             let live = Set(shown.map(\.id))
             for id in Array(nodes.keys) where !live.contains(id) {
                 nodes.removeValue(forKey: id)?.removeFromParentNode(); previous[id] = nil; slots[id] = nil
@@ -190,6 +223,7 @@ struct WorkspaceScene: NSViewRepresentable {
             }
             lastSelection = selected
             SCNTransaction.commit()
+            if changed { home() }
             view?.needsDisplay = true
         }
         @objc func clicked(_ gesture: NSClickGestureRecognizer) {
@@ -204,13 +238,15 @@ struct WorkspaceScene: NSViewRepresentable {
             }
             select(nil)
         }
-        private func addLine(_ a: SCNVector3, _ b: SCNVector3, color: NSColor) {
+        @discardableResult private func addLine(_ a: SCNVector3, _ b: SCNVector3, color: NSColor) -> SCNNode {
             let source = SCNGeometrySource(vertices: [a, b])
             let element = SCNGeometryElement(indices: [Int32(0), 1], primitiveType: .line)
             let geometry = SCNGeometry(sources: [source], elements: [element])
             geometry.firstMaterial?.diffuse.contents = color
             geometry.firstMaterial?.lightingModel = .constant
-            scene.rootNode.addChildNode(SCNNode(geometry: geometry))
+            let node = SCNNode(geometry: geometry)
+            scene.rootNode.addChildNode(node)
+            return node
         }
         private func cardImage(_ object: WorkspaceObject, selected: Bool) -> NSImage {
             let image = NSImage(size: NSSize(width: 480, height: 250))

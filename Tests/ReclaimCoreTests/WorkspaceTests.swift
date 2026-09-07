@@ -3,6 +3,12 @@ import Testing
 @testable import ReclaimCore
 
 @Suite struct WorkspaceTests {
+    @Test func observedProcessesAreNotGuessedFromGenericRuntimes() {
+        #expect(WorkspaceProcess.kind(executable: "/usr/local/bin/codex") == .agent)
+        #expect(WorkspaceProcess.kind(executable: "/usr/bin/swift-frontend") == .task)
+        #expect(WorkspaceProcess.kind(executable: "/usr/local/bin/node") == nil)
+        #expect(WorkspaceProcess.kind(executable: "/tmp/not-codex") == nil)
+    }
     @Test func heartbeatsReplaceEarlierStateAndExpire() {
         let now = Date(timeIntervalSince1970: 1000)
         let old = WorkspaceEvent(entityID: "build", kind: .task, title: "Build", timestamp: now.addingTimeInterval(-90))

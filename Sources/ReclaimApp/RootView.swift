@@ -14,6 +14,7 @@ struct RootView: View {
                     Label(section.rawValue, systemImage: section.symbol)
                         .tag(section)
                 }
+                .padding(.top, 12)
                 .navigationSplitViewColumnWidth(min: 210, ideal: 220, max: 260)
                 .safeAreaInset(edge: .bottom) { sidebarFooter }
             } detail: {

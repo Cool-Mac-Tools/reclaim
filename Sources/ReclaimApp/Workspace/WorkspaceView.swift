@@ -5,24 +5,27 @@ struct WorkspaceView: View {
     @EnvironmentObject private var app: AppModel
     @StateObject private var workspace = WorkspaceModel()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var objects: [WorkspaceObject] {
-        var rows = workspace.visible
-        if workspace.filter == nil || workspace.filter == .task {
-            if let busy = app.busy {
-                rows.append(WorkspaceObject(id: "reclaim:operation", kind: .task, title: busy,
-                    detail: "Reclaim operation in progress", source: "Reclaim", state: .active))
-            } else if app.mapping || app.scanning {
-                rows.append(WorkspaceObject(id: "reclaim:scan", kind: .task, title: "Scanning your Mac",
-                    detail: "\(app.mapProgressFiles.formatted()) files measured", source: "Reclaim", state: .active))
-            }
+    private var allObjects: [WorkspaceObject] {
+        var rows = workspace.objects
+        if let busy = app.busy {
+            rows.append(WorkspaceObject(id: "reclaim:operation", kind: .task, title: busy,
+                detail: "Reclaim operation in progress", source: "Reclaim", state: .active))
+        } else if app.mapping || app.scanning {
+            rows.append(WorkspaceObject(id: "reclaim:scan", kind: .task, title: "Scanning your Mac",
+                detail: "\(app.mapProgressFiles.formatted()) files measured", source: "Reclaim", state: .active))
         }
         return rows
+    }
+    private var objects: [WorkspaceObject] {
+        allObjects.filter { (workspace.filter == nil || $0.kind == workspace.filter) &&
+            (workspace.search.isEmpty || ($0.title + " " + $0.detail).localizedCaseInsensitiveContains(workspace.search)) }
     }
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().overlay(.white.opacity(0.07))
             filters
+            connectionBar
             HStack(spacing: 0) {
                 ZStack(alignment: .bottomLeading) {
                     WorkspaceScene(objects: objects, selectedID: workspace.selectedID, focus: workspace.filter,
@@ -56,13 +59,11 @@ struct WorkspaceView: View {
     }
     private var header: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 7) {
-                    Circle().fill(workspace.paused ? Color.orange : .mint).frame(width: 6, height: 6)
-                    Text(workspace.paused ? "PAUSED" : workspace.sampledAt == nil ? "CONNECTING" : "LIVE WORKSPACE")
-                        .font(.system(size: 10, weight: .bold)).tracking(1.7).foregroundStyle(.white.opacity(0.6))
-                }
-                Text("Your Mac, in motion.").font(.system(size: 24, weight: .semibold, design: .rounded))
+            Text("Live workspace").font(.system(size: 24, weight: .semibold, design: .rounded))
+            HStack(spacing: 5) {
+                Circle().fill(workspace.paused ? Color.orange : .mint).frame(width: 6, height: 6)
+                Text(workspace.paused ? "Paused" : workspace.sampledAt == nil ? "Connecting" : "Live")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             Button {
@@ -89,12 +90,31 @@ struct WorkspaceView: View {
     private func chip(_ kind: WorkspaceKind?, title: String, symbol: String) -> some View {
         let chosen = workspace.filter == kind
         return Button { workspace.filter = kind } label: {
-            Label(title, systemImage: symbol).font(.system(size: 11, weight: .medium))
+            Label("\(title) \(kind.map { k in allObjects.filter { $0.kind == k }.count } ?? allObjects.count)", systemImage: symbol).font(.system(size: 11, weight: .medium))
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(chosen ? (kind?.color ?? .white).opacity(0.18) : .white.opacity(0.035), in: Capsule())
                 .overlay(Capsule().strokeBorder(chosen ? (kind?.color ?? .white).opacity(0.4) : .white.opacity(0.08)))
                 .foregroundStyle(chosen ? kind?.color ?? .white : .white.opacity(0.6))
         }.buttonStyle(.plain)
+    }
+    private var connectionBar: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) { connectionControls }
+            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 14) { connectionControls } }
+        }
+        .font(.system(size: 11)).buttonStyle(.borderless)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20).padding(.bottom, 12)
+    }
+    @ViewBuilder private var connectionControls: some View {
+        Label("Apps & processes connected", systemImage: "checkmark.circle.fill").foregroundStyle(.mint)
+        Button(workspace.accessibility ? "Window details connected" : "Connect windows & terminals", systemImage: workspace.accessibility ? "checkmark.circle" : "macwindow.badge.plus") {
+            if !workspace.accessibility { workspace.enableAccessibility() }
+        }
+        Button("Browser connections", systemImage: "globe") { workspace.showConnections = true }
+        Button(!workspace.folderStatus.isEmpty ? "Folder unavailable" : workspace.watchedFolder == nil ? "Watch file edits" : "Folder connected", systemImage: "folder") {
+            workspace.chooseFolder()
+        }
     }
     private var inspector: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -234,12 +254,13 @@ struct WorkspaceView: View {
                 Section("Browser tabs") {
                     browserToggle("Safari", id: "com.apple.Safari")
                     browserToggle("Google Chrome", id: "com.google.Chrome")
-                    Text("macOS asks for Automation access when you connect a browser. Turn off a connection to remove its tab data. Connections reset when you leave Workspace.")
+                    Text("macOS asks for Automation access when you connect a browser. Turn off a connection to remove its tab data. Your choices are remembered. Collection pauses when you leave Workspace.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Files & code edits") {
                     if let folder = workspace.watchedFolder {
                         Text(folder).font(.caption).textSelection(.enabled)
+                        if !workspace.folderStatus.isEmpty { Text(workspace.folderStatus).font(.caption).foregroundStyle(.orange) }
                         Button("Disconnect folder") { workspace.disconnectFolder() }
                     }
                     Button("Choose workspace folder…") { workspace.chooseFolder() }
@@ -247,7 +268,7 @@ struct WorkspaceView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Agent actions & tasks") {
-                    Text("Local tools can report progress using reclaim workspace-event. An active report becomes idle after 60 seconds without an update.")
+                    Text("Recognized agent and build executables appear automatically as running processes. For actual tool actions and task descriptions, connect your tool using reclaim workspace-event. Reports become idle after 60 seconds without an update.")
                         .font(.caption).foregroundStyle(.secondary)
                     Text(workspace.eventPath).font(.system(size: 10, design: .monospaced)).textSelection(.enabled)
                     Button("Copy example command") {

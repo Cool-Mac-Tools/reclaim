@@ -9,7 +9,9 @@ returns to the full workspace overview.
 
 The world is built from live observations. Running apps, CPU/memory, and the
 startup volume update every three seconds while the view is open. App launches,
-exits, and focus changes appear in the activity stream. Objects keep their positions
+exits, focus changes, and recognized tool-process starts/exits appear in the activity
+stream. App cards include ordinary macOS window counts even without Accessibility.
+The view also refreshes on app activation/launch/exit notifications. Objects keep their positions
 between updates; the renderer draws on demand and honors Reduce Motion.
 
 Connections are explicit and local:
@@ -18,15 +20,19 @@ Connections are explicit and local:
   open document paths. Recognized terminal windows appear in the Terminals zone;
   terminal contents and command history are not collected.
 - **Safari / Chrome:** opt-in Automation connections read open tab titles and URLs
-  every 12 seconds (up to 80 per browser). Closing Workspace disconnects them.
+  every 12 seconds (up to 80 per browser). Choices are remembered across view changes/restarts; collection pauses while Workspace is closed.
 - **Workspace folder:** choose a folder to observe recursive saved-file changes.
   Git internals and generated build directories are excluded. Unsaved editor
   buffers are not observed. No file contents or screen pixels are captured.
-- **Agents / tasks:** tools report structured events through the local CLI bridge
-  below. The app does not infer tool calls from process names or read agent chats.
+- **Agents / tasks:** recognized executables (Codex, Claude, Cursor Agent, Aider,
+  OpenCode, and common build tools) appear automatically, with PID and resource use.
+  This proves a process is running, not which action it is doing. Tools can report
+  actual actions through the local CLI bridge below; agent chats are not read.
 
 The 3D scene shows up to 12 objects per zone for legibility; every collected object
-remains available in the inspector list. Window collection is bounded per sample,
+remains available in the inspector list. Empty areas are omitted from the overview;
+filters show counts and focus only the chosen area. Window, browser, and folder
+connection controls remain visible above the scene. Folder choices are remembered. Window collection is bounded per sample,
 so slow/unresponsive applications can temporarily have incomplete window coverage.
 The storage object opens My Mac's full category map; the Activity link opens the
 existing diagnostics. Storage categories retain their scan timestamp.
