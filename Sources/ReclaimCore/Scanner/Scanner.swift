@@ -188,16 +188,7 @@ enum RunningProcessProbe {
     /// rather than `-c comm` (16-char accounting name) so callers can substring
     /// -match multi-word app names like "Microsoft Teams" reliably.
     static func snapshot() -> Set<String> {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        task.arguments = ["-axo", "comm="]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        guard (try? task.run()) != nil else { return [] }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        guard let text = String(data: data, encoding: .utf8) else { return [] }
+        guard let text = ReadOnlyCommand.output("/bin/ps", arguments: ["-axo", "comm="]) else { return [] }
         return Set(text.split(separator: "\n").map {
             $0.trimmingCharacters(in: .whitespaces).lowercased()
         })

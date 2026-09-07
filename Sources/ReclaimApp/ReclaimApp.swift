@@ -20,6 +20,7 @@ struct ReclaimApp: App {
                 .frame(minWidth: 940, minHeight: 620)
         }
         .windowStyle(.titleBar)
+        .defaultSize(width: 1280, height: 820)
     }
 }
 

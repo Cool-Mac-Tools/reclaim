@@ -9,7 +9,7 @@ struct HistoryView: View {
 
     var body: some View {
         Group {
-            if model.history.isEmpty {
+            if model.history.isEmpty && model.purgeHistory.isEmpty {
                 empty
             } else {
                 content
@@ -33,9 +33,9 @@ struct HistoryView: View {
     }
     private var thisMonthBytes: Int64 {
         let cal = Calendar.current
-        return model.history
-            .filter { cal.isDate($0.startedAt, equalTo: Date(), toGranularity: .month) }
-            .reduce(0) { $0 + $1.quarantinedBytes }
+        return model.purgeHistory
+            .filter { cal.isDate($0.date, equalTo: Date(), toGranularity: .month) }
+            .reduce(0) { $0 + $1.verifiedFreedBytes }
     }
 
     private var content: some View {
@@ -44,7 +44,7 @@ struct HistoryView: View {
                 VStack(spacing: 16) {
                     HStack(spacing: 12) {
                         StatCard(title: "Reclaimed all-time", value: Fmt.bytes(model.lifetimeReclaimed),
-                                 subtitle: "across \(model.history.count) cleanup\(model.history.count == 1 ? "" : "s")",
+                                 subtitle: "measured free-space increase",
                                  color: .green)
                         StatCard(title: "This month", value: Fmt.bytes(thisMonthBytes),
                                  subtitle: "reclaimed since the 1st", color: .blue)
@@ -53,7 +53,7 @@ struct HistoryView: View {
                     }
                     if recent.count >= 2 {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Recent cleanups").font(.caption).foregroundStyle(.secondary)
+                            Text("Recently moved to quarantine").font(.caption).foregroundStyle(.secondary)
                             HistoryBarChart(entries: recent)
                         }
                     }
@@ -61,7 +61,23 @@ struct HistoryView: View {
                 .listRowSeparator(.hidden)
             }
 
-            Section("Every cleanup") {
+            Section("Verified recovery") {
+                ForEach(model.purgeHistory.reversed()) { entry in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                            Text("\(Fmt.bytes(entry.deletedBytes)) deleted · \(entry.failed.count) failed sessions")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(Fmt.bytes(entry.verifiedFreedBytes)).foregroundStyle(.green).monospacedDigit()
+                    }
+                }
+                Text("Recovery totals use measured free-space increases after permanent deletion. Earlier quarantine-only sessions are not counted as verified recovery.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("Moved to quarantine") {
                 ForEach(model.history, id: \.sessionID) { entry in
                     sessionRow(entry)
                 }
@@ -78,7 +94,7 @@ struct HistoryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.startedAt.formatted(date: .abbreviated, time: .shortened))
                     .fontWeight(.medium)
-                Text("\(count) item\(count == 1 ? "" : "s") reclaimed")
+                Text("\(count) item\(count == 1 ? "" : "s") staged")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

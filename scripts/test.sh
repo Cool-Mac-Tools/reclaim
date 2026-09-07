@@ -4,6 +4,9 @@
 # and interop dylib outside the default search paths.
 set -e
 cd "$(dirname "$0")/.."
+if [ "$(xcode-select -p)" = "/Library/Developer/CommandLineTools" ]; then
+    exec bash scripts/test-direct.sh "$@"
+fi
 FRAMEWORKS=/Library/Developer/CommandLineTools/Library/Developer/Frameworks
 INTEROP=/Library/Developer/CommandLineTools/Library/Developer/usr/lib
 exec swift test \

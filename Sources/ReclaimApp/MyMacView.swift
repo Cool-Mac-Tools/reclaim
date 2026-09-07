@@ -27,6 +27,7 @@ struct MyMacView: View {
         }
         .navigationTitle("My Mac")
         .toolbar {
+            Button { model.section = .workspace } label: { Label("3D workspace", systemImage: "cube.transparent") }
             if model.mapReport != nil {
                 Button { model.runEverything() } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")

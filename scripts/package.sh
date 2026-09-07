@@ -70,6 +70,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>When you connect a browser, Reclaim reads open tab titles and addresses to display them in your local 3D workspace.</string>
   <key>NSPhotoLibraryUsageDescription</key><string>Reclaim reads your Photos library locally to show individual photos and videos with their real sizes, so you can clear the biggest ones. Your photos never leave this Mac.</string>
   <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Reclaim. All rights reserved.</string>
 </dict>

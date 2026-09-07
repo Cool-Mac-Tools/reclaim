@@ -87,6 +87,7 @@ struct ActivityView: View {
         }
         .navigationTitle("Activity")
         .toolbar {
+            Button { model.section = .workspace } label: { Label("3D workspace", systemImage: "cube.transparent") }
             if activity.health != nil {
                 Button { activity.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
             }
@@ -105,12 +106,17 @@ struct ActivityView: View {
     }
 
     private func results(_ h: SystemHealth) -> some View {
-        List {
+        let worst = activity.diagnoses.first?.severity ?? .ok
+        let issues = activity.diagnoses.filter { $0.severity != .ok }
+        return List {
             Section { verdict(h).listRowSeparator(.hidden) }
-            Section { statRow(h).listRowSeparator(.hidden) }
+            Section { meters(h).listRowSeparator(.hidden) }
+                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 20))
 
-            Section("Why it might be slow") {
-                ForEach(activity.diagnoses) { diagnosisRow($0) }
+            if worst != .ok {
+                Section("Why it might be slow") {
+                    ForEach(issues) { diagnosisRow($0) }
+                }
             }
 
             Section {
@@ -122,10 +128,10 @@ struct ActivityView: View {
                     Picker("Sort", selection: $sort) {
                         ForEach(ProcessSort.allCases) { Text($0.rawValue).tag($0) }
                     }
-                    .pickerStyle(.segmented).labelsHidden().frame(width: 160)
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 150)
                 }
             } footer: {
-                Text("Live view, refreshed every few seconds. CPU is recent usage — 100% is one full core. Quitting an app is graceful; it can still ask to save.")
+                Text("Live — refreshes every few seconds. CPU is recent usage; 100% is one full core. Quitting is graceful.")
                     .font(.caption).foregroundStyle(.secondary).textCase(nil)
             }
         }
@@ -159,22 +165,48 @@ struct ActivityView: View {
         }
     }
 
-    private func statRow(_ h: SystemHealth) -> some View {
-        HStack(spacing: 12) {
-            StatCard(title: "Memory", value: "\(Int(h.memoryUsedFraction * 100))%",
-                     subtitle: "\(Fmt.bytes(h.usedMemoryBytes)) of \(Fmt.bytes(h.totalMemoryBytes))",
-                     color: h.memoryUsedFraction > 0.9 ? .orange : .primary)
-            StatCard(title: "Swap", value: Fmt.bytes(h.swapUsedBytes),
-                     subtitle: h.swapUsedBytes > 0 ? "memory on disk" : "none — good",
-                     color: h.swapUsedBytes > 3 * 1024 * 1024 * 1024 ? .orange : .primary)
-            StatCard(title: "CPU load", value: String(format: "%.1f", h.loadAverage1),
-                     subtitle: "across \(h.coreCount) cores",
-                     color: h.loadAverage1 > Double(h.coreCount) * 1.5 ? .orange : .primary)
-            StatCard(title: "Disk free", value: Fmt.bytes(h.freeDiskBytes),
-                     subtitle: "of \(Fmt.bytes(h.totalDiskBytes))",
-                     color: h.diskUsedFraction > 0.9 ? .orange : .blue)
+    private func meters(_ h: SystemHealth) -> some View {
+        let memF = h.memoryUsedFraction
+        let cpuF = min(1, h.loadAverage1 / Double(max(1, h.coreCount)))
+        let diskF = h.diskUsedFraction
+        return HStack(spacing: 12) {
+            MeterCard(title: "Memory", value: "\(Int((memF * 100).rounded()))%",
+                      caption: memoryCaption(h), valueColor: valueColor(memF)) {
+                UsageBar(fraction: memF, color: barColor(memF))
+            }
+            MeterCard(title: "CPU load", value: String(format: "%.1f", h.loadAverage1),
+                      caption: cpuCaption(h), valueColor: valueColor(cpuF)) {
+                UsageBar(fraction: cpuF, color: barColor(cpuF))
+            }
+            MeterCard(title: "Storage", value: "\(Int((diskF * 100).rounded()))%",
+                      caption: "\(Fmt.bytes(h.freeDiskBytes)) free of \(Fmt.bytes(h.totalDiskBytes))",
+                      valueColor: valueColor(diskF)) {
+                UsageBar(fraction: diskF, color: barColor(diskF))
+            }
         }
     }
+
+    private func memoryCaption(_ h: SystemHealth) -> String {
+        var s = "\(Fmt.bytes(h.usedMemoryBytes)) of \(Fmt.bytes(h.totalMemoryBytes))"
+        if h.swapUsedBytes > 0 { s += " · \(Fmt.bytes(h.swapUsedBytes)) swap" }
+        return s
+    }
+
+    private func cpuCaption(_ h: SystemHealth) -> String {
+        var s = "across \(h.coreCount) cores"
+        switch h.thermal {
+        case .fair:     s += " · warm"
+        case .serious:  s += " · running hot"
+        case .critical: s += " · very hot"
+        case .nominal:  break
+        }
+        return s
+    }
+
+    /// Shared pressure color ramp used by the meter bars + values, so calm is
+    /// blue, busy is amber, and critical is red — everywhere.
+    private func barColor(_ f: Double) -> Color { f >= 0.9 ? .red : (f >= 0.75 ? .orange : .blue) }
+    private func valueColor(_ f: Double) -> Color { f >= 0.9 ? .red : (f >= 0.75 ? .orange : .primary) }
 
     // MARK: Rows
 
@@ -197,28 +229,40 @@ struct ActivityView: View {
     }
 
     private func processRow(_ p: RunningProcess, total: Int64) -> some View {
-        HStack(spacing: 10) {
+        let byCPU = sort == .cpu
+        // Honest, absolute fractions: CPU vs one core, memory vs total RAM.
+        let fraction = byCPU ? min(1, p.cpuPercent / 100) : Double(p.memoryBytes) / Double(max(1, total))
+        let hot = byCPU && p.cpuPercent > 80
+        let barColor: Color = byCPU ? (hot ? .red : .orange) : .blue
+        let primary = byCPU ? "\(Int(p.cpuPercent.rounded()))%" : Fmt.bytes(p.memoryBytes)
+        let secondary = byCPU ? Fmt.bytes(p.memoryBytes) : "\(Int(p.cpuPercent.rounded()))% CPU"
+
+        return HStack(spacing: 11) {
             if let icon = activity.app(for: p.pid)?.icon {
-                Image(nsImage: icon).resizable().frame(width: 22, height: 22)
+                Image(nsImage: icon).resizable().frame(width: 26, height: 26)
             } else {
-                Image(systemName: "gearshape").foregroundStyle(.secondary).frame(width: 22)
+                Image(systemName: "gearshape.2")
+                    .foregroundStyle(.secondary).frame(width: 26, height: 26)
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(p.name).lineLimit(1)
-                Text("PID \(p.pid)").font(.caption2).foregroundStyle(.tertiary)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 1) {
-                Text("\(Int(p.cpuPercent))% CPU").font(.caption).monospacedDigit()
-                    .foregroundStyle(p.cpuPercent > 80 ? .orange : .secondary)
-                Text(Fmt.bytes(p.memoryBytes)).font(.caption2).monospacedDigit().foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(p.name).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(primary).font(.callout.weight(.semibold)).monospacedDigit()
+                        .foregroundStyle(hot ? .red : .primary)
+                }
+                HStack(spacing: 8) {
+                    UsageBar(fraction: fraction, color: barColor, height: 6)
+                    Text(secondary).font(.caption2).monospacedDigit().foregroundStyle(.tertiary)
+                        .frame(width: 70, alignment: .trailing)
+                }
             }
             if activity.app(for: p.pid) != nil {
                 Button("Quit") { activity.quit(pid: p.pid) }
                     .buttonStyle(.bordered).controlSize(.small)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 
     // MARK: Helpers
@@ -244,5 +288,50 @@ struct ActivityView: View {
         if d > 0 { return "\(d)d \(h)h" }
         if h > 0 { return "\(h)h \(m)m" }
         return "\(m)m"
+    }
+}
+
+// MARK: - Activity bars
+
+/// A rounded usage bar with a track — the visual backbone of the Activity tab's
+/// meters and process rows. Animates as live samples come in.
+struct UsageBar: View {
+    var fraction: Double
+    var color: Color
+    var height: CGFloat = 8
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.secondary.opacity(0.16))
+                Capsule().fill(color)
+                    .frame(width: max(0, min(1, fraction)) * geo.size.width)
+            }
+        }
+        .frame(height: height)
+        .animation(.easeOut(duration: 0.35), value: fraction)
+    }
+}
+
+/// A compact metric card: label, big value, a usage bar, and a caption.
+struct MeterCard<Bar: View>: View {
+    let title: String
+    let value: String
+    let caption: String
+    var valueColor: Color = .primary
+    @ViewBuilder var bar: () -> Bar
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title.uppercased()).font(.caption2.weight(.semibold)).tracking(0.5)
+                .foregroundStyle(.secondary)
+            Text(value).font(.system(size: 25, weight: .semibold, design: .rounded))
+                .foregroundStyle(valueColor).contentTransition(.numericText())
+            bar()
+            Text(caption).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 14))
     }
 }

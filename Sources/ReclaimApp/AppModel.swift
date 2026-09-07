@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
     enum Section: String, CaseIterable, Identifiable {
         case scan       = "Reclaim"
         case myMac      = "My Mac"
+        case workspace  = "Workspace"
         case activity   = "Activity"
         case quarantine = "Quarantine"
         case history    = "History"
@@ -20,6 +21,7 @@ final class AppModel: ObservableObject {
             switch self {
             case .scan:       "arrow.clockwise"
             case .myMac:      "internaldrive"
+            case .workspace:  "cube.transparent"
             case .activity:   "speedometer"
             case .quarantine: "arrow.uturn.backward.circle"
             case .history:    "chart.bar.xaxis"
@@ -57,6 +59,7 @@ final class AppModel: ObservableObject {
     // Quarantine
     @Published var sessions: [QuarantineSummary] = []
     @Published var lifetimeReclaimed: Int64 = 0
+    @Published var purgeHistory: [PurgeLedgerEntry] = []
     /// Full cleanup history (newest first), for the History timeline.
     @Published var history: [CleanupLedgerEntry] = []
     @Published var lastStagedBytes: Int64 = 0     // moved to quarantine, not yet freed
@@ -589,7 +592,8 @@ final class AppModel: ObservableObject {
     func loadQuarantine() {
         var summaries: [QuarantineSummary] = []
         for id in Quarantine.sessions() {
-            let entries = (try? Quarantine(sessionID: id).manifest()) ?? []
+            guard let manifest = try? Quarantine(sessionID: id).manifest() else { continue }
+            let entries = manifest.filter { FileManager.default.fileExists(atPath: $0.quarantinePath) }
             // Purge stale empty sessions (left by failed moves) so they don't
             // show as confusing "0 items" rows.
             guard !entries.isEmpty else { try? Quarantine(sessionID: id).purge(); continue }
@@ -599,16 +603,22 @@ final class AppModel: ObservableObject {
         }
         sessions = summaries
         let ledger = LedgerStore()
-        lifetimeReclaimed = ledger.lifetimeQuarantinedBytes
+        purgeHistory = (try? PurgeLedgerStore().all()) ?? []
+        lifetimeReclaimed = purgeHistory.reduce(0) { $0 + $1.verifiedFreedBytes }
         history = ledger.all().reversed()   // newest first
     }
 
     func restore(_ id: String) {
         busy = "Restoring…"
         Task {
-            let result = await Task.detached {
-                (try? Quarantine(sessionID: id).restoreAll()) ?? (restored: [], failed: [])
-            }.value
+            let result: (restored: [String], failed: [String])
+            do {
+                result = try await Task.detached { try Quarantine(sessionID: id).restoreAll() }.value
+            } catch {
+                busy = nil
+                actionAlert = "Could not read this quarantine session. Its files have been left in place."
+                return
+            }
             self.busy = nil
             if result.failed.isEmpty {
                 try? Quarantine(sessionID: id).purge()   // fully restored → clear the session
@@ -633,26 +643,27 @@ final class AppModel: ObservableObject {
 
     private func emptyQuarantine(ids: [String], label: String) {
         guard busy == nil else { return }
-        // The headline "you freed X" number = what the user actually cleared.
-        // It's robust to APFS snapshot lag (free-space delta can trail reality).
-        let purged = sessions.filter { ids.contains($0.id) }.reduce(0) { $0 + $1.bytes }
         busy = label
         Task {
-            let (freed, lag) = await Task.detached(priority: .userInitiated) { () -> (Int64, Bool) in
-                let before = Volume.freeBytes()
-                for id in ids { try? Quarantine(sessionID: id).purge() }
-                let after = Volume.freeBytes()
-                let freed = after - before
-                let snaps = SnapshotProbe.status().count
-                // Snapshot lag: we deleted real data but free space barely moved.
-                return (freed, snaps > 0 && freed < 100 * 1024 * 1024)
+            let outcome = await Task.detached(priority: .userInitiated) {
+                let entry = PurgeExecutor.run(ids: ids)
+                var recordingFailed = false
+                do { try PurgeLedgerStore().append(entry) } catch { recordingFailed = true }
+                return (entry, SnapshotProbe.status().count > 0, recordingFailed)
             }.value
-            self.lastFreedBytes = max(0, freed)
-            self.lastPurgeSnapshotLag = lag
-            self.busy = nil
-            self.loadQuarantine()
-            if purged > 0 {
-                self.celebration = Celebration(freed: purged, lifetime: self.lifetimeReclaimed)
+            let entry = outcome.0
+            lastFreedBytes = entry.verifiedFreedBytes
+            lastPurgeSnapshotLag = outcome.1 && entry.deletedBytes > entry.verifiedFreedBytes
+            busy = nil
+            loadQuarantine()
+            if !entry.failed.isEmpty {
+                actionAlert = "Deleted \(entry.succeeded.count) quarantine session(s); \(entry.failed.count) could not be deleted and remain available to retry. Measured free-space increase: \(Fmt.bytes(entry.verifiedFreedBytes))."
+            } else if outcome.2 {
+                actionAlert = "Deletion finished, but Reclaim couldn't save its history. Measured free-space increase: \(Fmt.bytes(entry.verifiedFreedBytes))."
+            } else if entry.verifiedFreedBytes > 0 {
+                celebration = Celebration(freed: entry.verifiedFreedBytes, lifetime: lifetimeReclaimed)
+            } else {
+                actionAlert = "Deleted \(Fmt.bytes(entry.deletedBytes)) from quarantine. Available disk space has not increased yet. macOS snapshots and other disk activity can delay the measured change."
             }
         }
     }

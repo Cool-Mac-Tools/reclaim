@@ -61,7 +61,12 @@ public struct Quarantine: Sendable {
         let entry = QuarantineEntry(
             originalPath: originalPath, quarantinePath: dest, bytes: bytes,
             quarantinedAt: now, source: source)
-        try appendManifest(entry)
+        do { try appendManifest(entry) } catch {
+            // If recording fails, roll back the move so data is not orphaned in
+            // an unrecorded session. Propagate the failure to the caller.
+            try fm.moveItem(atPath: dest, toPath: originalPath)
+            throw error
+        }
         return entry
     }
 
@@ -127,13 +132,13 @@ public struct Quarantine: Sendable {
     }
 
     private func appendManifest(_ entry: QuarantineEntry) throws {
-        var entries = (try? manifest()) ?? []
+        var entries = FileManager.default.fileExists(atPath: manifestPath) ? try manifest() : []
         entries.append(entry)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted]
         encoder.dateEncodingStrategy = .iso8601
         try FileManager.default.createDirectory(atPath: sessionDir, withIntermediateDirectories: true)
-        try encoder.encode(entries).write(to: URL(fileURLWithPath: manifestPath))
+        try encoder.encode(entries).write(to: URL(fileURLWithPath: manifestPath), options: .atomic)
     }
 
     /// All quarantine session IDs on disk, newest-looking first.

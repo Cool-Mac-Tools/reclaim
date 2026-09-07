@@ -271,17 +271,7 @@ public struct SystemMonitor: Sendable {
     // MARK: - Process table (via ps — works for all processes, no root)
 
     private static func processList() -> [RunningProcess] {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/ps")
-        // pid, recent %cpu, resident set size (KB), full command path.
-        task.arguments = ["-axo", "pid=,%cpu=,rss=,comm="]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        guard (try? task.run()) != nil else { return [] }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        guard let text = String(data: data, encoding: .utf8) else { return [] }
+        guard let text = ReadOnlyCommand.output("/bin/ps", arguments: ["-axo", "pid=,%cpu=,rss=,comm="]) else { return [] }
 
         let me = ProcessInfo.processInfo.processIdentifier
         var out: [RunningProcess] = []

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
   <!--
     Reclaim ships as a non-sandboxed Developer ID app. It needs broad
     read access to scan the user's Library and caches; that comes from

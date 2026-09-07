@@ -37,6 +37,7 @@ struct RootView: View {
             AIExplainSheet(request: req).environmentObject(AISettings.shared)
         }
         .task {
+            if CommandLine.arguments.contains("--workspace") { model.section = .workspace }
             model.loadQuarantine()
             model.refreshFDA()
             model.loadCachedMap()
@@ -52,6 +53,7 @@ struct RootView: View {
         switch model.section {
         case .scan:       ScanView()
         case .myMac:      MyMacView()
+        case .workspace:  WorkspaceView()
         case .activity:   ActivityView()
         case .quarantine: QuarantineView()
         case .history:    HistoryView()
