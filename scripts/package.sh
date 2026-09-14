@@ -50,7 +50,11 @@ fi
 echo "▸ Signing identity: $SIGN_ID"
 
 echo "▸ Building release (arm64)…"
-swift build -c release --product "$PRODUCT"
+# Some managed hosts already sandbox this process and cannot nest SwiftPM's
+# manifest sandbox. Normal developer builds retain SwiftPM's default sandbox.
+SPM_FLAGS=(--cache-path "$PWD/.build/spm-cache")
+if [[ "${SWIFTPM_DISABLE_SANDBOX:-0}" == "1" ]]; then SPM_FLAGS+=(--disable-sandbox); fi
+swift build -c release --product "$PRODUCT" "${SPM_FLAGS[@]}"
 
 BIN=".build/release/$PRODUCT"
 
