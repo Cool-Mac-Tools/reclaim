@@ -8,8 +8,8 @@
 #
 # Env:
 #   BUNDLE_ID   default com.reclaimac.app
-#   VERSION     default 1.0.0
-#   BUILD       default 1
+#   VERSION     default 1.5.0
+#   BUILD       default 150
 #   SIGN_ID     codesign identity; default first "Developer ID Application" in keychain,
 #               else falls back to ad-hoc "-" (local testing only).
 #   TEAM_ID     Apple Team ID (for notarization).
@@ -18,8 +18,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BUNDLE_ID="${BUNDLE_ID:-com.reclaimac.app}"
-VERSION="${VERSION:-1.0.0}"
-BUILD="${BUILD:-1}"
+VERSION="${VERSION:-1.5.0}"
+BUILD="${BUILD:-150}"
 APP_NAME="Reclaim"
 PRODUCT="ReclaimApp"          # SPM executable target name
 DIST="dist"
@@ -29,7 +29,8 @@ want_dmg=false; want_notarize=false
 for arg in "$@"; do
   case "$arg" in
     --dmg) want_dmg=true ;;
-    --notarize) want_notarize=true ;;
+    --notarize) want_notarize=true; want_dmg=true ;;
+    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
 
@@ -40,6 +41,11 @@ fi
 if [ -z "${SIGN_ID:-}" ]; then
   echo "⚠️  No Developer ID identity found — ad-hoc signing (runs on THIS Mac only)."
   SIGN_ID="-"
+fi
+if $want_notarize; then
+  [[ "$SIGN_ID" != "-" ]] || { echo "Notarization requires a Developer ID identity." >&2; exit 1; }
+  : "${NOTARY_PROFILE:?set NOTARY_PROFILE for notarization}"
+  xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
 fi
 echo "▸ Signing identity: $SIGN_ID"
 
@@ -106,6 +112,9 @@ if $want_dmg; then
     echo "▸ Stapling…"
     xcrun stapler staple "$DMG"
     xcrun stapler staple "$APP"
+    xcrun stapler validate "$DMG"
+    xcrun stapler validate "$APP"
+    spctl --assess --type execute --verbose=2 "$APP"
     echo "✓ Notarized & stapled $DMG"
   fi
 fi
