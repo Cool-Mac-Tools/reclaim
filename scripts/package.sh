@@ -97,6 +97,18 @@ else
 fi
 echo "✓ Built $APP"
 
+# Staple the app before copying it into the disk image so the installed app
+# carries its own ticket even when the recipient is offline.
+if $want_notarize; then
+  ZIP="$DIST/$APP_NAME-$VERSION-notary.zip"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  spctl --assess --type execute --verbose=2 "$APP"
+  rm -f "$ZIP"
+fi
+
 if $want_dmg; then
   DMG="$DIST/$APP_NAME-$VERSION.dmg"
   echo "▸ Building $DMG …"
@@ -115,10 +127,7 @@ if $want_dmg; then
     xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
     echo "▸ Stapling…"
     xcrun stapler staple "$DMG"
-    xcrun stapler staple "$APP"
     xcrun stapler validate "$DMG"
-    xcrun stapler validate "$APP"
-    spctl --assess --type execute --verbose=2 "$APP"
     echo "✓ Notarized & stapled $DMG"
   fi
 fi
