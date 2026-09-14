@@ -19,18 +19,7 @@ public struct SnapshotStatus: Codable, Sendable {
 public enum SnapshotProbe {
     /// Lists local Time Machine snapshots on the data volume. Read-only.
     public static func status() -> SnapshotStatus {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/tmutil")
-        task.arguments = ["listlocalsnapshots", "/"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = Pipe()
-        guard (try? task.run()) != nil else { return SnapshotStatus(snapshotNames: []) }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
-        guard let text = String(data: data, encoding: .utf8) else {
-            return SnapshotStatus(snapshotNames: [])
-        }
+        guard let text = ReadOnlyCommand.output("/usr/bin/tmutil", arguments: ["listlocalsnapshots", "/"]) else { return SnapshotStatus(snapshotNames: []) }
         let names = text.split(separator: "\n")
             .map(String.init)
             .filter { $0.hasPrefix("com.apple.") }

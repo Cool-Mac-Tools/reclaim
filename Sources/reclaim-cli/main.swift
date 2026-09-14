@@ -21,6 +21,28 @@ func tierBadge(_ tier: RiskTier) -> String {
 }
 
 switch command {
+case "workspace-event":
+    let values = Array(args.dropFirst())
+    func option(_ name: String) -> String? {
+        guard let i = values.firstIndex(of: name), i + 1 < values.count else { return nil }
+        return values[i + 1]
+    }
+    guard let rawKind = option("--kind"), let kind = WorkspaceKind(rawValue: rawKind),
+          [.file, .terminal, .agent, .task].contains(kind),
+          let entityID = option("--id"), let title = option("--title"),
+          let state = WorkspaceEvent.State(rawValue: option("--state") ?? "active") else {
+        FileHandle.standardError.write(Data("Usage: reclaim workspace-event --kind agent|task|file|terminal --id ID --title TITLE [--state active|idle|completed|failed] [--detail TEXT] [--path FILE]\n".utf8))
+        exit(2)
+    }
+    do {
+        try WorkspaceEventStore().append(WorkspaceEvent(entityID: entityID, kind: kind, title: title,
+            detail: option("--detail") ?? "", state: state, path: option("--path")))
+        print("Workspace event recorded locally.")
+    } catch {
+        FileHandle.standardError.write(Data("Could not record workspace event: \(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
+
 case "recipes":
     print("Reclaim recipe catalog — \(RecipeCatalog.all.count) recipes\n")
     for group in Dictionary(grouping: RecipeCatalog.all, by: \.group).sorted(by: { $0.key < $1.key }) {
