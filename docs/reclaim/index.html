@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Reclaim — explainable, app-aware storage cleanup for Mac. See what your tools left behind, understand every finding, remove it safely to a reversible quarantine, and prove the space you got back.">
   <title>Reclaim — Mac Storage Cleaner for Developers</title>
   <link rel="icon" type="image/png" sizes="48x48" href="../assets/favicon.png">
   <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="../css/styles.css?v=20260815">
+  <link rel="stylesheet" href="../css/styles.css?v=20260917-mobile">
   <link rel="canonical" href="https://reclaimac.com/reclaim/">
   <meta name="theme-color" content="#ffffff">
   <meta property="og:type" content="website">
@@ -495,6 +495,35 @@
     </div>
   </footer>
 
+  <aside class="mobile-download" data-mobile-download aria-labelledby="mobile-download-title" hidden>
+    <div class="mobile-download-inner">
+      <button class="mobile-download-close" type="button" data-mobile-download-dismiss aria-label="Dismiss send-to-Mac options">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+      <h2 id="mobile-download-title">Send Reclaim to your Mac.</h2>
+      <p class="mobile-download-copy">You're on mobile. Save the download link for later.</p>
+      <div class="mobile-download-actions">
+        <a class="mobile-download-action" data-send-text>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2 1.8-5.4A8.5 8.5 0 1 1 21 11.5Z"/></svg>
+          Send via Text
+        </a>
+        <a class="mobile-download-action mobile-download-action-secondary" data-send-email>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="15" rx="3"/><path d="m3 6 9 7 9-7"/></svg>
+          Send via Email
+        </a>
+      </div>
+      <div class="mobile-download-help">
+        <span data-send-status role="status">Opens your messaging or email app.</span>
+        <button class="mobile-download-copy-link" type="button" data-copy-download>Copy link</button>
+      </div>
+      <label class="mobile-download-fallback" data-copy-fallback hidden>
+        Download link
+        <input type="text" readonly data-download-url aria-label="Download link to copy">
+      </label>
+    </div>
+  </aside>
+
   <script src="../js/main.js?v=20260728"></script>
+  <script src="../js/mobile-download.js?v=20260917"></script>
 </body>
 </html>

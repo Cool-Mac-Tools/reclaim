@@ -25,6 +25,8 @@ html {
 
 body {
   font-family: var(--font);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
   color: var(--apple-text);
   background: #fff;
   line-height: 1.47059;
@@ -1336,6 +1338,182 @@ body.menu-open { overflow: hidden; }
 }
 
 .footer-legal a:first-child { border-left: none; padding-left: 0; }
+
+/* ── Mobile send-to-Mac footer ── */
+
+.mobile-download-visible {
+  scroll-padding-bottom: calc(var(--mobile-download-height, 190px) + 16px);
+}
+
+.mobile-download-visible body {
+  padding-bottom: var(--mobile-download-height, 190px);
+}
+
+.mobile-download[hidden],
+.mobile-download-fallback[hidden] { display: none; }
+
+.mobile-download {
+  position: fixed;
+  z-index: 9996;
+  inset: auto 0 0;
+  max-height: calc(100dvh - 44px);
+  overflow-y: auto;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(251, 251, 253, 0.96);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.05);
+  padding: 18px max(18px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+body.menu-open .mobile-download { visibility: hidden; }
+
+.mobile-download-inner {
+  position: relative;
+  max-width: 560px;
+  margin-inline: auto;
+}
+
+.mobile-download h2 {
+  padding-right: 32px;
+  font-size: 21px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.mobile-download-copy {
+  max-width: 440px;
+  margin-top: 6px;
+  padding-right: 20px;
+  color: var(--apple-gray-dark);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.mobile-download-close {
+  position: absolute;
+  top: -13px;
+  right: -13px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--apple-gray-dark);
+  background: transparent;
+  cursor: pointer;
+}
+
+.mobile-download-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mobile-download-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 8px;
+  border-radius: 980px;
+  background: var(--apple-blue);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.mobile-download-action svg { flex-shrink: 0; }
+.mobile-download-action:hover { background: var(--apple-blue-hover); text-decoration: none; }
+
+.mobile-download-action-secondary {
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--apple-blue);
+}
+
+.mobile-download-action-secondary:hover { background: rgba(0, 113, 227, 0.13); }
+
+.mobile-download-help {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  margin-top: 2px;
+  color: var(--apple-gray-dark);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.mobile-download-copy-link {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 8px 0 8px 8px;
+  border: 0;
+  color: var(--apple-blue);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mobile-download a:focus-visible,
+.mobile-download button:focus-visible,
+.mobile-download input:focus-visible {
+  outline: 3px solid var(--apple-blue);
+  outline-offset: 3px;
+}
+
+.mobile-download-fallback {
+  display: block;
+  padding-block: 4px 8px;
+  color: var(--apple-gray-dark);
+  font-size: 12px;
+}
+
+.mobile-download-fallback input {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 10px;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--apple-text);
+  font: inherit;
+  font-size: 16px;
+}
+
+@media (max-width: 359px) {
+  .mobile-download { padding-inline: 12px; }
+  .mobile-download h2 { font-size: 19px; }
+  .mobile-download-action { gap: 5px; font-size: 13px; }
+}
+
+@media (max-height: 500px) and (min-width: 600px) {
+  .mobile-download-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 20px;
+    max-width: 760px;
+  }
+  .mobile-download h2,
+  .mobile-download-copy { grid-column: 1; }
+  .mobile-download-actions {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    align-self: center;
+    margin-top: 0;
+    margin-right: 24px;
+  }
+  .mobile-download-help,
+  .mobile-download-fallback { grid-column: 1 / -1; }
+}
 
 /* ── Responsive ── */
 
