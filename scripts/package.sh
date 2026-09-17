@@ -8,8 +8,8 @@
 #
 # Env:
 #   BUNDLE_ID   default com.reclaimac.app
-#   VERSION     default 1.5.0
-#   BUILD       default 150
+#   VERSION     default 1.5.1
+#   BUILD       default 151
 #   SIGN_ID     codesign identity; default first "Developer ID Application" in keychain,
 #               else falls back to ad-hoc "-" (local testing only).
 #   TEAM_ID     Apple Team ID (for notarization).
@@ -18,8 +18,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BUNDLE_ID="${BUNDLE_ID:-com.reclaimac.app}"
-VERSION="${VERSION:-1.5.0}"
-BUILD="${BUILD:-150}"
+VERSION="${VERSION:-1.5.1}"
+BUILD="${BUILD:-151}"
 APP_NAME="Reclaim"
 PRODUCT="ReclaimApp"          # SPM executable target name
 DIST="dist"
