@@ -8,8 +8,8 @@
 #
 # Env:
 #   BUNDLE_ID   default com.reclaimac.app
-#   VERSION     default 1.5.1
-#   BUILD       default 151
+#   VERSION     default 1.5.2
+#   BUILD       default 152
 #   SIGN_ID     codesign identity; default first "Developer ID Application" in keychain,
 #               else falls back to ad-hoc "-" (local testing only).
 #   TEAM_ID     Apple Team ID (for notarization).
@@ -18,8 +18,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BUNDLE_ID="${BUNDLE_ID:-com.reclaimac.app}"
-VERSION="${VERSION:-1.5.1}"
-BUILD="${BUILD:-151}"
+VERSION="${VERSION:-1.5.2}"
+BUILD="${BUILD:-152}"
 APP_NAME="Reclaim"
 PRODUCT="ReclaimApp"          # SPM executable target name
 DIST="dist"
@@ -63,6 +63,12 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# CLT-only Macs use the asset catalog compiled and verified by our macOS CI.
+# Refuse stale icon artifacts instead of silently shipping the old inset icon.
+if xcrun --find actool >/dev/null 2>&1; then scripts/compile-appicon.sh; fi
+[[ -s Resources/CompiledIcons/Assets.car ]] || { echo "Missing compiled app icons. Build the macOS icon artifact first." >&2; exit 1; }
+shasum -a 256 -c Resources/CompiledIcons/source.sha256
+cp Resources/CompiledIcons/Assets.car "$APP/Contents/Resources/Assets.car"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -74,6 +80,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
   <key>CFBundleExecutable</key><string>$APP_NAME</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD</string>

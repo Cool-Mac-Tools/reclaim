@@ -27,7 +27,7 @@ struct MyMacView: View {
         }
         .navigationTitle("My Mac")
         .toolbar {
-            Button { model.section = .workspace } label: { Label("3D workspace", systemImage: "cube.transparent") }
+            Button { model.section = .activity; model.activityDiagram = true } label: { Label("Activity diagram", systemImage: "cube.transparent") }
             if model.mapReport != nil {
                 Button { model.runEverything() } label: {
                     Label("Rescan", systemImage: "arrow.clockwise")
@@ -52,12 +52,8 @@ struct MyMacView: View {
 
     /// Which stage of the scan we're in, inferred from files-walked so far.
     private var scanStage: String {
-        switch model.mapProgressFiles {
-        case 0:            "Starting scan…"
-        case ..<200_000:   "Reading your files…"
-        case ..<800_000:   "Measuring apps, caches & media…"
-        default:           "Reconciling with your disk & finding duplicates…"
-        }
+        if !model.mapping { return model.scanStage }
+        return model.mapProgressFiles == 0 ? "Starting storage map…" : "Measuring readable files and app bundles…"
     }
 
     /// Fraction 0…1 for the bar, capped just below full until the scan actually
@@ -79,7 +75,15 @@ struct MyMacView: View {
                 Text("\(Int(displayedCount).formatted()) files scanned")
                     .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
             }
-            Text("This one's thorough — it walks your whole disk. Takes a bit longer than a quick scan.")
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                let elapsed = timeline.date.timeIntervalSince(model.mapStartedAt ?? model.scanStartedAt ?? timeline.date)
+                let estimate = max(60, model.mapReport?.elapsedSeconds ?? 180)
+                Text(!model.mapping ? model.scanEstimate(at: timeline.date) :
+                     estimate > elapsed ? "About \(max(1, Int(ceil((estimate - elapsed) / 60)))) min remaining · estimate" :
+                     "\(Int(elapsed))s elapsed · Still measuring; taking longer than estimated")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Text("The storage map runs after cleanup checks. Progress and time are estimates; larger disks can take longer.")
                 .font(.caption).foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center).frame(maxWidth: 360)
         }
@@ -166,7 +170,7 @@ struct MyMacView: View {
                 }
             }
             CapacityBar(report: report)
-            if report.fullDiskAccess != .granted {
+            if model.fdaStatus == .denied {
                 note("Full Disk Access is off — Messages, Mail, and protected app data can't be "
                    + "itemized yet, so they're counted under “System & Other.” Grant access for "
                    + "an accurate breakdown.", icon: "lock.shield")
@@ -183,7 +187,13 @@ struct MyMacView: View {
     @ViewBuilder private func row(_ c: StorageCategory, report: MacStorageReport) -> some View {
         let files = report.filesByCategory[c.key] ?? []
         if files.isEmpty {
-            rowContent(c, report: report, browsable: false)
+            if c.key == "protected" || c.key == "protecteddata" {
+                Button { model.openFDASettings() } label: {
+                    rowContent(c, report: report, browsable: true)
+                }.buttonStyle(.plain)
+            } else {
+                rowContent(c, report: report, browsable: false)
+            }
         } else {
             Button {
                 drill = MyMacDrill(category: c, files: files)

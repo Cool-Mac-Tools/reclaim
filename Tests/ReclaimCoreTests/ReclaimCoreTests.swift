@@ -436,8 +436,8 @@ import Foundation
         #expect(UnusedAppScanner.isUnused(lastUsed: daysAgo(300), installedAt: daysAgo(400), now: now, unusedDays: cutoff))
         // Opened recently → keep.
         #expect(!UnusedAppScanner.isUnused(lastUsed: daysAgo(10), installedAt: daysAgo(400), now: now, unusedDays: cutoff))
-        // Never opened but installed long ago → unused.
-        #expect(UnusedAppScanner.isUnused(lastUsed: nil, installedAt: daysAgo(300), now: now, unusedDays: cutoff))
+        // Missing last-use data stays unknown, regardless of install age.
+        #expect(!UnusedAppScanner.isUnused(lastUsed: nil, installedAt: daysAgo(300), now: now, unusedDays: cutoff))
         // Never opened but freshly installed → don't nag.
         #expect(!UnusedAppScanner.isUnused(lastUsed: nil, installedAt: daysAgo(5), now: now, unusedDays: cutoff))
         // No dates at all → can't judge, don't flag.

@@ -10,7 +10,7 @@ public struct PurgeLedgerEntry: Codable, Identifiable, Sendable {
     public let freeAfterBytes: Int64
     /// A measured volume delta, only attributed to a purge with a successful deletion.
     /// Snapshot-pinned bytes remain zero until the OS actually releases them.
-    public var verifiedFreedBytes: Int64 { succeeded.isEmpty ? 0 : max(0, freeAfterBytes - freeBeforeBytes) }
+    public var verifiedFreedBytes: Int64 { succeeded.isEmpty ? 0 : min(max(0, deletedBytes), max(0, freeAfterBytes - freeBeforeBytes)) }
     public init(id: String = UUID().uuidString, date: Date = Date(), succeeded: [String], failed: [String],
                 deletedBytes: Int64, freeBeforeBytes: Int64, freeAfterBytes: Int64) {
         self.id = id; self.date = date; self.succeeded = succeeded; self.failed = failed
@@ -24,16 +24,12 @@ public struct PurgeLedgerStore: Sendable {
         url = URL(fileURLWithPath: home).appendingPathComponent(".reclaim/purges.json")
     }
     public func all() throws -> [PurgeLedgerEntry] {
-        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
-        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode([PurgeLedgerEntry].self, from: Data(contentsOf: url))
+        try DurableJSONStore<[PurgeLedgerEntry]>(path: url.path).read(default: [])
     }
     public func append(_ entry: PurgeLedgerEntry) throws {
-        var entries = try all(); entries.append(entry)
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(entries).write(to: url, options: .atomic)
+        try DurableJSONStore<[PurgeLedgerEntry]>(path: url.path).update(default: []) { entries in
+            if !entries.contains(where: { $0.id == entry.id }) { entries.append(entry) }
+        }
     }
 }
 

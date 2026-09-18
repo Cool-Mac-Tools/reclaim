@@ -72,15 +72,15 @@ enum AIProvider: String, CaseIterable, Identifiable, Codable {
 enum AIKeychain {
     static let service = "com.reclaimac.app.ai"
 
-    static func set(_ value: String, account: String) {
-        delete(account)
-        let q: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: Data(value.utf8),
-        ]
-        SecItemAdd(q as CFDictionary, nil)
+    static func set(_ value: String, account: String) -> OSStatus {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service, kSecAttrAccount as String: account]
+        let data = Data(value.utf8)
+        let updated = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if updated != errSecItemNotFound { return updated }
+        var insert = query
+        insert[kSecValueData as String] = data
+        return SecItemAdd(insert as CFDictionary, nil)
     }
     static func get(_ account: String) -> String? {
         let q: [String: Any] = [
@@ -110,6 +110,7 @@ enum AIKeychain {
 @MainActor
 final class AISettings: ObservableObject {
     static let shared = AISettings()
+    @Published var keyError: String?
 
     @Published var activeProvider: AIProvider {
         didSet { UserDefaults.standard.set(activeProvider.rawValue, forKey: providerKey) }
@@ -134,7 +135,14 @@ final class AISettings: ObservableObject {
     func hasKey(_ p: AIProvider) -> Bool { key(for: p) != nil }
     func setKey(_ value: String, for p: AIProvider) {
         let t = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { AIKeychain.delete(account(p)) } else { AIKeychain.set(t, account: account(p)) }
+        keyError = nil
+        if t.isEmpty { AIKeychain.delete(account(p)) }
+        else {
+            let status = AIKeychain.set(t, account: account(p))
+            if status != errSecSuccess {
+                keyError = "Could not save the key in Keychain. " + ((SecCopyErrorMessageString(status, nil) as String?) ?? "Try again.")
+            }
+        }
         revision += 1
     }
     func model(for p: AIProvider) -> String {

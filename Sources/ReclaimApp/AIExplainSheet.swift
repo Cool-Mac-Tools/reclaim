@@ -14,6 +14,7 @@ struct AIExplainSheet: View {
     @State private var seededPrompt = ""              // full first-turn payload
     @State private var input = ""
     @State private var sending = false
+    @State private var keyDraft = ""
     @State private var error: String?
     @FocusState private var inputFocused: Bool
 
@@ -24,12 +25,45 @@ struct AIExplainSheet: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            transcriptView
-            Divider()
-            composer
+            if ai.isReady {
+                transcriptView
+                Divider()
+                composer
+            } else {
+                setup
+            }
         }
         .frame(width: 540, height: 500)
-        .task { await start() }
+        .task { if ai.isReady { await start() } }
+        .onChange(of: ai.activeProvider) { _, _ in
+            keyDraft = ""
+            if ai.isReady { Task { await start() } }
+        }
+    }
+
+    private var setup: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Connect AI to explain this item").font(.title3.weight(.semibold))
+            Text("Bring your own API key. Your provider bills your usage directly. Reclaim sends this item's metadata, never its file contents.")
+                .foregroundStyle(.secondary)
+            Picker("Provider", selection: $ai.activeProvider) {
+                ForEach(AIProvider.allCases) { Text($0.displayName).tag($0) }
+            }
+            Text(provider.keySteps).font(.callout)
+            Link("Get a \(provider.short) API key", destination: provider.keyConsoleURL)
+            SecureField(provider.keyPlaceholder, text: $keyDraft).textFieldStyle(.roundedBorder)
+            if let keyError = ai.keyError { Text(keyError).font(.caption).foregroundStyle(.orange) }
+            Button("Save key & explain this item") {
+                ai.setKey(keyDraft, for: provider)
+                if ai.isReady { keyDraft = ""; Task { await start() } }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Text("Stored in your Mac's Keychain. You can replace or remove it in AI settings.")
+                .font(.caption).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(24)
     }
 
     private var header: some View {
@@ -56,6 +90,7 @@ struct AIExplainSheet: View {
                         Label(error, systemImage: "exclamationmark.triangle")
                             .font(.callout).foregroundStyle(.orange)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Retry") { Task { await send() } }.disabled(sending)
                     }
                 }
                 .padding(16)

@@ -299,13 +299,13 @@ public struct MacStorageMap: Sendable {
     ]
 
     /// True if the path lives inside one of the atomic bundles above.
-    static func insideAtomicBundle(_ path: String) -> Bool {
-        atomicBundleSuffixes.contains { path.contains($0 + "/") }
+    public static func insideAtomicBundle(_ path: String) -> Bool {
+        atomicBundleSuffixes.contains { path.lowercased().contains($0 + "/") }
     }
 
     /// True if the path IS an atomic bundle (ends with one of the suffixes).
     public static func isAtomicBundle(_ path: String) -> Bool {
-        atomicBundleSuffixes.contains { path.hasSuffix($0) }
+        atomicBundleSuffixes.contains { path.lowercased().hasSuffix($0) }
     }
 
     /// The shallowest atomic-bundle ancestor of a path (the bundle itself if the
@@ -314,9 +314,9 @@ public struct MacStorageMap: Sendable {
         var best: String?
         for suffix in atomicBundleSuffixes {
             var root: String?
-            if let r = path.range(of: suffix + "/") {
-                root = String(path[..<r.lowerBound]) + suffix
-            } else if path.hasSuffix(suffix) {
+            if let r = path.range(of: suffix + "/", options: .caseInsensitive) {
+                root = String(path[..<r.upperBound].dropLast())
+            } else if path.lowercased().hasSuffix(suffix) {
                 root = path
             }
             if let root, best == nil || root.count < best!.count { best = root }
@@ -329,7 +329,7 @@ public struct MacStorageMap: Sendable {
     public func run(progress: (@Sendable (Int) -> Void)? = nil) -> MacStorageReport {
         let start = Date()
         let facts = volumeFacts()
-        let used = max(0, facts.capacity - facts.importantFree)
+        let used = max(0, facts.capacity - facts.rawFree)
         let purgeable = max(0, facts.importantFree - facts.rawFree)
 
         var bytesByKey: [String: Int64] = [:]
@@ -419,7 +419,7 @@ public struct MacStorageMap: Sendable {
             scannedAt: start,
             hostname: ProcessInfo.processInfo.hostName,
             capacityBytes: facts.capacity,
-            freeBytes: facts.importantFree,
+            freeBytes: facts.rawFree,
             usedBytes: used,
             purgeableBytes: purgeable,
             categories: categories,

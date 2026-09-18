@@ -15,13 +15,14 @@ struct MyMacDrill: Identifiable {
     /// Ledger source for anything cleaned from here — "my-mac" for a category,
     /// or the originating recipe id when browsing a Reclaim finding's contents.
     var source: String = "my-mac"
+    var accessWarning: String?
+    var matchingCount: Int?
 
-    /// Which categories a user may bulk-send to quarantine from My Mac. System,
-    /// other-users, and applications are view-only — deleting individual files
-    /// there is unsafe even reversibly, and apps belong to a future uninstall flow.
+    /// System and other-user categories are view-only. Applications can be
+    /// removed only as complete bundles; Messages exposes attachments only.
     static let actionableKeys: Set<String> = [
         "media", "music", "documents", "downloads",
-        "userother", "trash", "developer", "appdata",
+        "userother", "trash", "developer", "appdata", "applications", "messages",
     ]
 
     static func tier(for key: String) -> RiskTier {
@@ -35,7 +36,7 @@ struct MyMacDrill: Identifiable {
         self.id = category.key
         self.name = category.name
         self.symbol = category.symbol
-        self.files = files
+        self.files = category.key == "messages" ? files.filter { $0.path.contains("/Library/Messages/Attachments/") } : files
         self.categoryBytes = category.bytes
         self.actionable = Self.actionableKeys.contains(category.key)
         self.tier = Self.tier(for: category.key)
@@ -44,7 +45,7 @@ struct MyMacDrill: Identifiable {
     /// Browse the real files inside a Reclaim finding (a folder), reusing this
     /// same rich browser instead of a raw folder tree.
     init(id: String, name: String, symbol: String, files: [ClusterFile],
-         categoryBytes: Int64, tier: RiskTier, source: String) {
+         categoryBytes: Int64, tier: RiskTier, source: String, accessWarning: String? = nil, matchingCount: Int? = nil) {
         self.id = id
         self.name = name
         self.symbol = symbol
@@ -53,6 +54,8 @@ struct MyMacDrill: Identifiable {
         self.actionable = true
         self.tier = tier
         self.source = source
+        self.accessWarning = accessWarning
+        self.matchingCount = matchingCount
     }
 }
 
@@ -108,7 +111,10 @@ struct CategoryBrowser: View {
     /// per-file (any category), so everything a user can safely delete is
     /// deletable; system/other-owned files stay locked with a clear reason.
     private func removable(_ f: ClusterFile) -> Bool {
-        !isBundle(f) && CleanupExecutor.isRemovable(f.path)
+        drill.actionable && (drill.id != "applications" || AppDiscovery.isUserApplication(f.path))
+            && (drill.id != "messages" || f.path.contains("/Library/Messages/Attachments/"))
+            && CleanupExecutor.isRemovable(f.path)
+            && !AppProcessMatcher.isRunning(appPath: f.path, executables: model.runningExecutables)
     }
     private var selectableFiltered: [ClusterFile] { filtered.filter(removable) }
     private var allFilteredSelected: Bool {
@@ -123,11 +129,31 @@ struct CategoryBrowser: View {
         VStack(spacing: 0) {
             header
             filterBar
+            if let warning = drill.accessWarning {
+                HStack {
+                    Label(warning, systemImage: "lock.shield").font(.caption).foregroundStyle(.orange)
+                    Button("Access settings") { model.openFDASettings() }
+                }.padding(12)
+            }
+            if let count = drill.matchingCount, count > drill.files.count {
+                Text("Showing the largest \(drill.files.count) of \(count) matching files. Filters apply to these listed files.")
+                    .font(.caption).foregroundStyle(.secondary).padding(8)
+            }
             if drill.id == "media" { photoLibraryBanner }
+            if drill.id == "messages" || drill.source == "app.messages.attachments" {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Review Messages attachments").font(.headline)
+                    Text("Preview photos, videos and documents before selecting them. Dates are file modification dates. Moving an attachment can make it unavailable in its conversation; iCloud may sync changes. Your message database is never selected.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Button("Largest attachments") { sort = .largest; sizeFilter = .any; ageFilter = .any }
+                        Button("Oldest attachments") { sort = .oldest; sizeFilter = .any; ageFilter = .any }
+                    }.controlSize(.small)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
+            }
             if notShownBytes > 50 * 1024 * 1024 {
-                Label("\(Fmt.bytes(notShownBytes)) more isn't listed here — files under 1 MB and "
-                    + "protected bundle contents (like your Photos library or app internals), which "
-                    + "aren't safe to remove individually.", systemImage: "info.circle")
+                Label("\(Fmt.bytes(notShownBytes)) more isn't listed here — smaller files, listing limits and "
+                    + "protected data. Library and application contents are never offered piece by piece.", systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.vertical, 8)
@@ -264,9 +290,12 @@ struct CategoryBrowser: View {
                     get: { selected.contains(file.path) },
                     set: { on in if on { selected.insert(file.path) } else { selected.remove(file.path) } }))
                     .labelsHidden().toggleStyle(.checkbox)
+            } else if AppProcessMatcher.isRunning(appPath: file.path, executables: model.runningExecutables) {
+                Image(systemName: "pause.circle").foregroundStyle(.secondary).frame(width: 16)
+                    .help("This application is running. Quit it to select it; status updates automatically.")
             } else if bundle {
                 Image(systemName: "shippingbox").foregroundStyle(.secondary).frame(width: 16)
-                    .help("A bundle (library or app) — open to manage; never removed piece by piece")
+                    .help("This library or protected app cannot be removed here; open its app to manage it.")
             } else {
                 Image(systemName: "lock").foregroundStyle(.tertiary).frame(width: 16)
                     .help("Owned by the system or another account — needs admin rights to remove")
@@ -274,22 +303,23 @@ struct CategoryBrowser: View {
             ThumbView(path: file.path)
             VStack(alignment: .leading, spacing: 2) {
                 Text((file.path as NSString).lastPathComponent).fontWeight(.medium).lineLimit(1)
-                Text(bundle ? "Library/app bundle — open to manage; not removed piece by piece"
+                Text(AppDiscovery.isUserApplication(file.path) ? "Complete application · reversible removal; documents stay in place"
+                            : bundle ? "Library bundle — open to manage its contents"
                             : infoLine(file))
                     .font(.caption).foregroundStyle(.tertiary).lineLimit(1)
             }
             Spacer()
             Text(Fmt.bytes(file.bytes)).monospacedDigit().foregroundStyle(.secondary)
-            if ai.isReady { AISparkButton { aiRequest = AppModel.request(forFile: file, category: drill.name) } }
+            AISparkButton { aiRequest = AppModel.request(forFile: file, category: drill.name) }
             if file.path.hasSuffix(".photoslibrary") {
                 Button { showPhotoBrowser = true } label: { Image(systemName: "photo.stack") }
                     .buttonStyle(.borderless).help("Browse individual photos & videos")
             }
             if bundle {
                 Button {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.path)])
                 } label: { Image(systemName: "arrow.up.forward.app") }
-                    .buttonStyle(.borderless).help("Open")
+                    .buttonStyle(.borderless).help("Show application in Finder")
             }
             if !bundle {
                 Button { quickLook = PreviewItem(path: file.path) } label: { Image(systemName: "eye") }

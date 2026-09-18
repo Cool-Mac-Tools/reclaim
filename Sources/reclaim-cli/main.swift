@@ -382,8 +382,8 @@ case "quarantine":
         let total = entries.reduce(0) { $0 + $1.bytes }
         print("  \(s) · \(entries.count) item(s) · \(ByteFormatter.string(total))")
     }
-    let lifetime = LedgerStore().lifetimeQuarantinedBytes
-    print("\nLifetime reclaimed: \(ByteFormatter.string(lifetime))")
+    let lifetime = try LedgerStore().lifetimeQuarantinedBytes
+    print("\nLifetime moved to quarantine: \(ByteFormatter.string(lifetime))")
     print("Restore: reclaim restore <session> · Delete permanently: reclaim purge <session> --apply")
 
 case "restore":

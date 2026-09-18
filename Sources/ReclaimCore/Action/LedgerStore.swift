@@ -10,26 +10,18 @@ public struct LedgerStore: Sendable {
         self.path = (home as NSString).appendingPathComponent(".reclaim/ledger.json")
     }
 
-    public func all() -> [CleanupLedgerEntry] {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([CleanupLedgerEntry].self, from: data)) ?? []
+    public func all() throws -> [CleanupLedgerEntry] {
+        try DurableJSONStore<[CleanupLedgerEntry]>(path: path).read(default: [])
     }
 
     public func append(_ entry: CleanupLedgerEntry) throws {
-        var entries = all()
-        entries.append(entry)
-        let dir = (path as NSString).deletingLastPathComponent
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted]
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(entries).write(to: URL(fileURLWithPath: path))
+        try DurableJSONStore<[CleanupLedgerEntry]>(path: path).update(default: []) { entries in
+            if !entries.contains(where: { $0.sessionID == entry.sessionID }) { entries.append(entry) }
+        }
     }
 
     /// Lifetime bytes moved to quarantine across all sessions.
     public var lifetimeQuarantinedBytes: Int64 {
-        all().reduce(0) { $0 + $1.quarantinedBytes }
+        get throws { try all().reduce(0) { $0 + $1.quarantinedBytes } }
     }
 }

@@ -31,29 +31,46 @@ public enum DirLister {
     /// intermediate folders. Recursive, capped, and off the main thread.
     public static func deepFiles(of dir: String, limit: Int = 500,
                                  minBytes: Int64 = 16 * 1024) -> [ClusterFile] {
-        let url = URL(fileURLWithPath: dir)
-        let keys: Set<URLResourceKey> = [
-            .totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
-            .isRegularFileKey, .contentModificationDateKey,
-        ]
-        guard let en = FileManager.default.enumerator(
-            at: url, includingPropertiesForKeys: Array(keys),
-            options: [.skipsPackageDescendants], errorHandler: { _, _ in true }) else { return [] }
+        inspectFiles(of: dir, limit: limit, minBytes: minBytes).files
+    }
 
+    public struct Listing: Sendable {
+        public let files: [ClusterFile]
+        public let blockedPaths: [String]
+        public let matchingCount: Int
+    }
+
+    public static func inspectFiles(of dir: String, limit: Int = 1500,
+                                    minBytes: Int64 = 16 * 1024) -> Listing {
+        let url = URL(fileURLWithPath: dir)
+        do { _ = try FileManager.default.contentsOfDirectory(atPath: dir) }
+        catch { return Listing(files: [], blockedPaths: [dir], matchingCount: 0) }
+        let keys: Set<URLResourceKey> = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
+                                       .isRegularFileKey, .contentModificationDateKey]
+        var blocked: [String] = []
+        guard let en = FileManager.default.enumerator(at: url, includingPropertiesForKeys: Array(keys),
+            options: [.skipsPackageDescendants], errorHandler: { url, _ in
+                if blocked.count < 20 { blocked.append(url.path) }; return true
+            }) else { return Listing(files: [], blockedPaths: [dir], matchingCount: 0) }
         var files: [ClusterFile] = []
-        let trimAt = limit * 4
+        var count = 0
         while let u = en.nextObject() as? URL {
-            guard let v = try? u.resourceValues(forKeys: keys), v.isRegularFile == true else { continue }
-            let bytes = Int64(v.totalFileAllocatedSize ?? v.fileAllocatedSize ?? 0)
-            guard bytes >= minBytes else { continue }
-            files.append(ClusterFile(path: u.path, bytes: bytes, modified: v.contentModificationDate))
-            if files.count > trimAt {
-                files.sort { $0.bytes > $1.bytes }
-                files = Array(files.prefix(limit))
-            }
+            if MacStorageMap.isAtomicBundle(u.path) { en.skipDescendants(); continue }
+            guard !MacStorageMap.insideAtomicBundle(u.path) else { continue }
+            do {
+                let v = try u.resourceValues(forKeys: keys)
+                guard v.isRegularFile == true else { continue }
+                let bytes = Int64(v.totalFileAllocatedSize ?? v.fileAllocatedSize ?? 0)
+                guard bytes >= minBytes else { continue }
+                count += 1
+                files.append(ClusterFile(path: u.path, bytes: bytes, modified: v.contentModificationDate))
+                if files.count > max(1, limit) * 4 {
+                    files = Array(files.sorted { $0.bytes > $1.bytes }.prefix(max(1, limit)))
+                }
+            } catch { if blocked.count < 20 { blocked.append(u.path) } }
         }
-        files.sort { $0.bytes > $1.bytes }
-        return Array(files.prefix(limit))
+        return Listing(files: Array(files.sorted { $0.bytes > $1.bytes }.prefix(max(1, limit))),
+                       blockedPaths: blocked, matchingCount: count)
     }
 
     public static func children(of dir: String, limit: Int = 300) -> [FileNode] {

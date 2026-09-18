@@ -19,9 +19,10 @@ struct AIView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
-                if ai.isReady { summarySection }
+                summarySection
                 providerTabs
                 keySection
+                if let error = ai.keyError { Text(error).foregroundStyle(.orange).font(.caption) }
                 modelSection
                 if ai.hasKey(provider) { testSection }
                 privacyNote
@@ -68,7 +69,7 @@ struct AIView: View {
                 Image(systemName: "sparkles").font(.title).foregroundStyle(.tint)
                 Text("Ask AI about anything on your Mac").font(.title2.weight(.semibold))
             }
-            Text("Connect your own account from OpenAI, Anthropic, or Google. Once connected, a ✨ button appears next to items in Reclaim and My Mac — click it to ask “What is this, and is it safe to delete?” You use your own key, so you're in control of cost and privacy.")
+            Text("Connect your own account from OpenAI, Anthropic, or Google. Use the ✨ button next to items in Reclaim and My Mac to ask “What is this, and is it safe to delete?” You use your own key, so you're in control of cost and privacy.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if ai.isReady {
                 Label("Connected to \(provider.short) — look for the ✨ button next to items.",

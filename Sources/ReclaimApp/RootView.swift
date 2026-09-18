@@ -38,7 +38,8 @@ struct RootView: View {
             AIExplainSheet(request: req).environmentObject(AISettings.shared)
         }
         .task {
-            if CommandLine.arguments.contains("--workspace") { model.section = .workspace }
+            if CommandLine.arguments.contains("--workspace") { model.section = .activity; model.activityDiagram = true }
+            model.startObservingApps()
             model.loadQuarantine()
             model.refreshFDA()
             model.loadCachedMap()
@@ -47,6 +48,8 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshFDA()
+            model.refreshRunningApps()
+            model.loadQuarantine()
         }
     }
 
@@ -54,7 +57,6 @@ struct RootView: View {
         switch model.section {
         case .scan:       ScanView()
         case .myMac:      MyMacView()
-        case .workspace:  WorkspaceView()
         case .activity:   ActivityView()
         case .quarantine: QuarantineView()
         case .history:    HistoryView()
@@ -67,10 +69,13 @@ struct RootView: View {
             if model.needsFullDiskAccess { sidebarFDAHint }
             Divider()
             VStack(alignment: .leading, spacing: 2) {
-                Text("Reclaimed all-time")
+                Text("Space recovered")
                     .font(.caption2).foregroundStyle(.secondary)
-                Text(Fmt.bytes(model.lifetimeReclaimed))
+                Text(model.historyError != nil && model.purgeHistory.isEmpty ? "Unavailable" : Fmt.bytes(model.lifetimeReclaimed))
                     .font(.callout.weight(.semibold)).foregroundStyle(.green)
+                if model.stagedBytes > 0 {
+                    Text("\(Fmt.bytes(model.stagedBytes)) in quarantine").font(.caption2).foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -191,8 +196,7 @@ struct FDABanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Turn on Full Disk Access for the full picture")
                     .font(.callout.weight(.semibold))
-                Text("Without it, macOS hides Messages, Mail, and protected app data — "
-                   + "so your storage looks smaller than it is and some cleanups are off-limits.")
+                Text("This copy of Reclaim cannot read some protected data. In Settings, remove any older Reclaim entry, add this copy, enable it, then quit and reopen Reclaim.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
@@ -201,6 +205,8 @@ struct FDABanner: View {
                     Text("Open Settings").frame(minWidth: 108)
                 }
                 .buttonStyle(.borderedProminent).controlSize(.regular)
+                Button("Show this app") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
+                    .buttonStyle(.link).font(.caption)
                 Button("Re-check") { model.refreshFDA() }
                     .buttonStyle(.link).font(.caption)
             }

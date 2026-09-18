@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The packaged .app sets its Dock/Finder icon via Info.plist
         // (CFBundleIconFile = AppIcon). For `swift run` dev builds there's no
         // bundle, so fall back to the icns in Resources if it's alongside.
-        if let icon = NSImage(contentsOfFile: "Resources/AppIcon.icns") {
+        if Bundle.main.bundleURL.pathExtension != "app", let icon = NSImage(contentsOfFile: "Resources/AppIcon.icns") {
             NSApp.applicationIconImage = icon
         }
         NSApp.activate(ignoringOtherApps: true)

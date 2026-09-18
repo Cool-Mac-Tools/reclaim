@@ -91,10 +91,14 @@ public struct CleanupExecutor: Sendable {
     /// touched without admin rights — no amount of Full Disk Access changes Unix
     /// ownership. We detect this up front so it's an honest skip, not a silent
     /// move that fails with EPERM and leaves the item sitting in the list.
-    public static func isRemovable(_ path: String) -> Bool {
+    public static func isRemovable(_ path: String, home: String = NSHomeDirectory()) -> Bool {
+        guard !MacStorageMap.insideAtomicBundle(path) else { return false }
+        if MacStorageMap.isAtomicBundle(path) {
+            guard AppDiscovery.isUserApplication(path, home: home) else { return false }
+        }
         var st = stat()
         guard lstat(path, &st) == 0 else { return false }
-        return st.st_uid == getuid()
+        return st.st_uid == getuid() || (AppDiscovery.isUserApplication(path, home: home) && FileManager.default.isDeletableFile(atPath: path))
     }
 
     public func run(_ targets: [CleanupTarget], sessionID: String,
@@ -103,7 +107,22 @@ public struct CleanupExecutor: Sendable {
         let quarantine = Quarantine(home: home, sessionID: sessionID)
         var results: [ActionResult] = []
 
-        for target in targets {
+        let running = RunningProcessProbe.snapshot()
+        var handled = Set<String>()
+        for target in targets.sorted(by: { $0.path.count < $1.path.count }) {
+            let canonical = AppDiscovery.canonicalPath(target.path)
+            guard !handled.contains(where: { canonical == $0 || canonical.hasPrefix($0 + "/") }) else { continue }
+            if canonical.hasSuffix("/Library/Messages/Attachments") {
+                results.append(.init(path: target.path, status: .skippedNotAllowed, bytes: 0,
+                                     detail: "Review and select individual Messages attachments; the entire collection is never moved."))
+                continue
+            }
+            if MacStorageMap.insideAtomicBundle(canonical) ||
+                (MacStorageMap.isAtomicBundle(canonical) && !AppDiscovery.isUserApplication(canonical, home: home)) {
+                results.append(.init(path: target.path, status: .skippedNotAllowed, bytes: 0,
+                                     detail: "Protected bundle contents — select the whole application instead."))
+                continue
+            }
             // Policy gates, in order of severity.
             if target.riskTier == .red {
                 results.append(.init(path: target.path, status: .skippedNotAllowed,
@@ -115,7 +134,16 @@ public struct CleanupExecutor: Sendable {
                                      detail: "\(target.riskTier.displayName) needs explicit review; not auto-cleaned."))
                 continue
             }
-            if target.blockingAppRunning {
+            let required = Self.requiredApps(path: target.path, source: target.source)
+            if running.isEmpty && (!required.isEmpty || AppDiscovery.isUserApplication(canonical, home: home)) {
+                results.append(.init(path: target.path, status: .skippedAppRunning, bytes: 0,
+                                     detail: "Could not verify running apps. Retry when process information is available."))
+                continue
+            }
+            let appRunning = AppDiscovery.isUserApplication(canonical, home: home) &&
+                AppProcessMatcher.isRunning(appPath: canonical, executables: running)
+            if appRunning || !AppProcessMatcher.running(required, executables: running).isEmpty ||
+                (required.isEmpty && target.blockingAppRunning) {
                 results.append(.init(path: target.path, status: .skippedAppRunning,
                                      bytes: 0, detail: "Owning app is running — quit it first."))
                 continue
@@ -125,7 +153,7 @@ public struct CleanupExecutor: Sendable {
                                      detail: "Operation not permitted or missing — skipped, not forced."))
                 continue
             }
-            guard Self.isRemovable(target.path) else {
+            guard Self.isRemovable(target.path, home: home) else {
                 results.append(.init(path: target.path, status: .skippedProtected, bytes: 0,
                                      detail: "Owned by the system or another account — needs admin rights to remove."))
                 continue
@@ -140,13 +168,14 @@ public struct CleanupExecutor: Sendable {
             do {
                 let entry = try quarantine.store(target.path, source: target.source, now: now)
                 if !fm.fileExists(atPath: target.path) {
+                    handled.insert(canonical)
                     results.append(.init(path: target.path, status: .quarantined,
                                          bytes: entry.bytes, detail: "Moved to quarantine (reversible)."))
                 } else {
                     results.append(.init(path: target.path, status: .failed, bytes: 0,
                                          detail: "Move reported success but the item is still there."))
                 }
-            } catch where isDir.boolValue {
+            } catch where isDir.boolValue && !MacStorageMap.isAtomicBundle(target.path) {
                 let r = quarantine.storeContents(target.path, source: target.source, now: now)
                 if r.count > 0 {
                     let note = r.failed > 0
@@ -168,5 +197,20 @@ public struct CleanupExecutor: Sendable {
             sessionID: sessionID, startedAt: now, results: results,
             freeBeforeBytes: freeBefore, freeAfterBytes: freeAfter,
             snapshotsPresent: SnapshotProbe.status().count)
+    }
+
+    public static func requiredApps(path: String, source: String) -> [String] {
+        var names = RecipeCatalog.all.first(where: { $0.id == source })?.requiresQuit ?? []
+        let canonical = AppDiscovery.canonicalPath(path)
+        if source == "my-mac" {
+            for recipe in RecipeCatalog.all where !recipe.requiresQuit.isEmpty {
+                if recipe.paths.flatMap({ PathResolver.resolve($0) }).contains(where: {
+                    canonical == $0 || canonical.hasPrefix($0 + "/")
+                }) { names += recipe.requiresQuit }
+            }
+        }
+        if canonical.contains("/Library/Messages/") { names.append("Messages") }
+        if canonical.contains("/Library/Mail/") { names.append("Mail") }
+        return Array(Set(names)).sorted()
     }
 }

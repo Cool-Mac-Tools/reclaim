@@ -63,13 +63,19 @@ struct ScanView: View {
     }
 
     private var scanning: some View {
-        VStack(spacing: 14) {
-            ProgressView().controlSize(.large)
-            Text("Scanning your Mac…").font(.headline)
-            Text("Caches · developer tools · app leftovers · personal files")
-                .font(.caption).foregroundStyle(.secondary)
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            VStack(spacing: 14) {
+                ProgressView().controlSize(.large)
+                Text("Scanning your Mac…").font(.headline)
+                Text(model.scanStage).font(.callout).foregroundStyle(.secondary)
+                Text("\(model.scanCompletedStages) of 5 checks complete")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(model.scanEstimate(at: timeline.date)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                Text("You can keep using your Mac. Nothing is removed during a scan.")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: Results
@@ -81,11 +87,11 @@ struct ScanView: View {
 
                 let safe = model.items.filter(\.safe)
                 // Unused apps get their own "you don't use this" section.
-                let unused = model.items.filter { $0.source == "unused-app" }
+                let unused = model.items.filter { $0.source == "unused-app" || $0.source == "large-app" }
                 // "Review" now includes anything blocked by a running app — its
                 // reclaimable value shouldn't hide in a side section. Only truly
                 // protected (Red) items are split out.
-                let review = model.items.filter { !$0.safe && $0.tier != .red && $0.source != "unused-app" }
+                let review = model.items.filter { !$0.safe && $0.tier != .red && $0.source != "unused-app" && $0.source != "large-app" }
                 let protectedItems = model.items.filter { $0.tier == .red }
 
                 if !safe.isEmpty {
@@ -120,13 +126,13 @@ struct ScanView: View {
                     Section {
                         ForEach(review) { row($0) }
                     } header: { groupHeader("More to review", "History and personal files — plus anything an open app is using. We explain each; you decide.", review) }
-                        footer: { Text("Rows with a pause icon are in use by an app you have open — quit it and hit Rescan to clean them. Reclaim won't clear data out from under a running app.") }
+                        footer: { Text("Rows with a pause icon are in use by an app you have open — quit it to clean them. Status updates when apps open or close. Reclaim won't clear data out from under a running app.") }
                 }
                 if !unused.isEmpty {
                     Section {
                         ForEach(unused) { row($0) }
-                    } header: { groupHeader("You probably don't use these", "Apps you haven't opened in a long time. Removing one is reversible — it moves to quarantine. You decide.", unused) }
-                        footer: { Text("Based on when each app was last opened. An app you actually use won't show here.") }
+                    } header: { groupHeader("Apps worth reviewing", "Large apps and apps last observed more than six months ago. Check the usage evidence before choosing. Nothing is pre-selected.", unused) }
+                        footer: { Text("Missing usage dates are labelled unknown. Removing an app moves the complete application to quarantine; your documents stay in place.") }
                 }
                 if !protectedItems.isEmpty {
                     Section {
@@ -240,9 +246,9 @@ struct CleanRow: View {
     @EnvironmentObject var ai: AISettings
     let item: AppModel.CleanItem
     @Binding var isOn: Bool
-    @State private var expanded = false
     @State private var browse: MyMacDrill?
     @State private var loadingBrowse = false
+    @State private var browseError: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -259,48 +265,28 @@ struct CleanRow: View {
                     ForEach(item.blockingApps, id: \.self) { AppChip(name: $0) }
                     Spacer()
                     Text(Fmt.bytes(item.bytes)).monospacedDigit().foregroundStyle(.secondary)
-                    if ai.isReady { AISparkButton { model.explainItem(item) } }
-                    if item.isDirectory {
-                        Button { openBrowser() } label: {
-                            if loadingBrowse {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Image(systemName: "rectangle.split.3x3").font(.caption)
-                            }
-                        }
-                        .buttonStyle(.borderless)
-                        .help("Browse what's inside — previews, sizes, and dates")
-                        .disabled(loadingBrowse)
-                    }
+                    AISparkButton { model.explainItem(item) }
                 }
                 if !item.subtitle.isEmpty {
                     Text(item.subtitle).font(.caption).foregroundStyle(.secondary)
                 }
-                if expanded {
-                    Text(item.detail).font(.callout).foregroundStyle(.secondary)
-                    if !item.impact.isEmpty {
-                        Text("If you remove it: \(item.impact)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if !item.recurrence.isEmpty {
-                        Text("Comes back? \(item.recurrence)")
-                            .font(.caption).foregroundStyle(.tertiary)
-                    }
-                    Text(item.id).font(.caption.monospaced()).foregroundStyle(.tertiary).textSelection(.enabled)
-                }
                 HStack(spacing: 14) {
-                    Button(expanded ? "Less" : "Why?") { expanded.toggle() }
+                    Button("Why this?") { model.explainItem(item) }
                         .buttonStyle(.link).font(.caption)
                     if item.isDirectory {
-                        Button("Browse contents") { openBrowser() }
+                        Button(loadingBrowse ? "Loading contents…" : "Browse contents") { openBrowser() }
                             .buttonStyle(.link).font(.caption).disabled(loadingBrowse)
                     }
-                    if !item.selectable && !item.blockingApps.isEmpty {
+                    if !item.selectable && !item.blockingApps.isEmpty && item.source != "app.messages.attachments" {
                         Button("Quit \(item.blockingApps.joined(separator: " & ")) & Clean") {
                             model.quitAndClean(item)
                         }
                         .buttonStyle(.link).font(.caption).disabled(model.busy != nil)
                     }
+                }
+                if let browseError {
+                    Text(browseError).font(.caption).foregroundStyle(.orange)
+                    Button("Review access settings") { model.openFDASettings() }.buttonStyle(.link).font(.caption)
                 }
             }
         }
@@ -316,13 +302,16 @@ struct CleanRow: View {
         guard !loadingBrowse else { return }
         loadingBrowse = true
         Task {
-            let files = await Task.detached(priority: .userInitiated) {
-                DirLister.deepFiles(of: item.id)
+            let listing = await Task.detached(priority: .userInitiated) {
+                DirLister.inspectFiles(of: item.id)
             }.value
             loadingBrowse = false
+            browseError = listing.blockedPaths.isEmpty ? nil : "Some contents could not be read. Check Full Disk Access for this copy of Reclaim, or the folder's permissions."
+            guard !listing.files.isEmpty || listing.blockedPaths.isEmpty else { return }
             browse = MyMacDrill(
                 id: "finding", name: item.name, symbol: "folder",
-                files: files, categoryBytes: item.bytes, tier: item.tier, source: item.source)
+                files: listing.files, categoryBytes: item.bytes, tier: item.tier, source: item.source,
+                accessWarning: browseError, matchingCount: listing.matchingCount)
         }
     }
 }

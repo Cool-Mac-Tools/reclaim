@@ -23,22 +23,13 @@ public struct AppInventory: Sendable {
         var names = Set<String>()
         let fm = FileManager.default
 
-        for root in searchRoots {
-            let dir = NSString(string: root).expandingTildeInPath
-            guard let entries = try? fm.contentsOfDirectory(atPath: dir) else { continue }
-            for entry in entries where entry.hasSuffix(".app") {
-                let appPath = (dir as NSString).appendingPathComponent(entry)
-                names.insert((entry as NSString).deletingPathExtension.lowercased())
-                let plist = (appPath as NSString).appendingPathComponent("Contents/Info.plist")
-                if let data = fm.contents(atPath: plist),
-                   let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
-                    if let id = info["CFBundleIdentifier"] as? String {
-                        ids.insert(id.lowercased())
-                    }
-                    if let name = info["CFBundleName"] as? String {
-                        names.insert(name.lowercased())
-                    }
-                }
+        for appPath in AppDiscovery.paths(roots: searchRoots.map { NSString(string: $0).expandingTildeInPath }) {
+            names.insert(URL(fileURLWithPath: appPath).deletingPathExtension().lastPathComponent.lowercased())
+            let plist = (appPath as NSString).appendingPathComponent("Contents/Info.plist")
+            if let data = fm.contents(atPath: plist),
+               let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
+                if let id = info["CFBundleIdentifier"] as? String { ids.insert(id.lowercased()) }
+                if let name = info["CFBundleName"] as? String { names.insert(name.lowercased()) }
             }
         }
         return AppInventory(bundleIDs: ids, names: names)

@@ -92,7 +92,7 @@ public struct Diagnosis: Identifiable, Sendable {
 public struct SystemMonitor: Sendable {
     public init() {}
 
-    public func sample() -> SystemHealth {
+    public func sample(previous: SystemHealth? = nil) -> SystemHealth {
         let mem = Self.memoryStats()
         let swap = Self.swapUsage()
         let disk = VolumeProbe.dataVolume()
@@ -115,8 +115,8 @@ public struct SystemMonitor: Sendable {
             uptimeSeconds: ProcessInfo.processInfo.systemUptime,
             freeDiskBytes: disk.free,
             totalDiskBytes: disk.total,
-            loginItemsCount: Self.loginItemsCount(),
-            snapshotCount: SnapshotProbe.status().count,
+            loginItemsCount: previous?.loginItemsCount ?? Self.loginItemsCount(),
+            snapshotCount: previous?.snapshotCount ?? SnapshotProbe.status().count,
             processes: Self.processList())
     }
 
@@ -144,8 +144,8 @@ public struct SystemMonitor: Sendable {
         if h.swapUsedBytes > 3 * 1024 * 1024 * 1024 || (h.memoryUsedFraction > 0.9 && h.swapUsedBytes > 1024 * 1024 * 1024) {
             out.append(Diagnosis(
                 id: "memory", severity: h.swapUsedBytes > 6 * 1024 * 1024 * 1024 ? .critical : .warning,
-                title: "Your Mac is low on memory",
-                detail: "It's overflowing \(ByteFormatter.string(h.swapUsedBytes)) onto the disk as swap, which is much slower than RAM. Quitting memory-heavy apps below will help most.",
+                title: "Your Mac is using disk space for memory",
+                detail: "\(ByteFormatter.string(h.swapUsedBytes)) of swap is in use. Swap can remain after a busy period; it does not by itself prove current memory pressure. If your Mac feels slow, review the largest memory users below.",
                 symbol: "memorychip"))
         } else if h.memoryUsedFraction > 0.85 {
             out.append(Diagnosis(
@@ -173,13 +173,19 @@ public struct SystemMonitor: Sendable {
                 symbol: "thermometer.high"))
         }
 
-        // Runaway single process.
-        if let hog = h.processes.max(by: { $0.cpuPercent < $1.cpuPercent }), hog.cpuPercent > 90 {
-            out.append(Diagnosis(
-                id: "hog-cpu", severity: .info,
-                title: "\(hog.name) is using a lot of CPU",
-                detail: "\(hog.name) is at \(Int(hog.cpuPercent))% CPU right now. If that's unexpected, quitting it should speed things up.",
-                symbol: "bolt"))
+        // Attribute helper processes to their owning app, matching the list
+        // and diagram. One busy helper should not hide its app's total impact.
+        let groups = ActivityProcessGroup.groups(h.processes)
+        if let hog = groups.max(by: { $0.cpuPercent < $1.cpuPercent }), hog.cpuPercent > 60 {
+            out.append(Diagnosis(id: "hog-cpu", severity: .info,
+                title: "\(hog.name) is using \(Int(hog.cpuPercent))% CPU",
+                detail: "Across \(hog.processes.count) process(es), including helpers. If this work is unexpected, review the app before quitting; an export or build may legitimately be busy.", symbol: "bolt"))
+        }
+        if let largest = groups.filter({ $0.appPath != nil }).max(by: { $0.memoryBytes < $1.memoryBytes }),
+           h.totalMemoryBytes > 0, Double(largest.memoryBytes) / Double(h.totalMemoryBytes) > 0.15 {
+            out.append(Diagnosis(id: "memory-user", severity: .info,
+                title: "\(largest.name) is your largest app memory user",
+                detail: "\(ByteFormatter.string(largest.memoryBytes)) across \(largest.processes.count) process(es). Close unused documents or tabs if you need headroom; high usage alone is not a fault.", symbol: "memorychip"))
         }
 
         // Startup bloat.
@@ -201,6 +207,11 @@ public struct SystemMonitor: Sendable {
                 symbol: "clock.arrow.circlepath"))
         }
 
+        if h.processes.isEmpty {
+            out.append(Diagnosis(id: "coverage", severity: .warning,
+                title: "Process data is unavailable",
+                detail: "The process table could not be read. Refresh to retry; resource totals alone cannot show which app is responsible.", symbol: "exclamationmark.triangle"))
+        }
         if out.isEmpty {
             out.append(Diagnosis(
                 id: "ok", severity: .ok,
@@ -273,12 +284,11 @@ public struct SystemMonitor: Sendable {
     private static func processList() -> [RunningProcess] {
         guard let text = ReadOnlyCommand.output("/bin/ps", arguments: ["-axo", "pid=,%cpu=,rss=,comm="]) else { return [] }
 
-        let me = ProcessInfo.processInfo.processIdentifier
         var out: [RunningProcess] = []
         for line in text.split(separator: "\n") {
             let fields = line.split(separator: " ", omittingEmptySubsequences: true)
             guard fields.count >= 4,
-                  let pid = Int32(fields[0]), pid != me,
+                  let pid = Int32(fields[0]),
                   let cpu = Double(fields[1]),
                   let rssKB = Int64(fields[2]) else { continue }
             let path = fields[3...].joined(separator: " ")

@@ -26,14 +26,7 @@ public struct StorageScanner: Sendable {
                     guard seenPaths.insert(resolved).inserted else { continue }
                     let measurement = SizeMeasurement.measure(resolved)
                     guard measurement.allocatedBytes >= recipe.thresholdBytes else { continue }
-                    // Match on the FULL executable path (substring), so multi-word
-                    // apps like "Microsoft Teams" / "Adobe Premiere Pro" actually
-                    // trip their quit-first gate — `ps comm` truncates to 16 chars,
-                    // which silently defeated exact-name matching.
-                    let blockingApps = recipe.requiresQuit.filter { name in
-                        let n = name.lowercased()
-                        return running.contains { $0.contains(n) }
-                    }
+                    let blockingApps = AppProcessMatcher.running(recipe.requiresQuit, executables: running)
                     let blocking = !blockingApps.isEmpty
                     findings.append(Finding(
                         recipeID: recipe.id,
@@ -181,13 +174,13 @@ enum SizeMeasurement {
 
 // MARK: - Process + volume probes
 
-enum RunningProcessProbe {
+public enum RunningProcessProbe {
     /// Lowercased FULL executable paths of running processes, via `ps` (works
     /// without AppKit, so the CLI stays usable over SSH; the app can layer
     /// NSWorkspace later). We use `comm=` (full path, no header, untruncated)
     /// rather than `-c comm` (16-char accounting name) so callers can substring
     /// -match multi-word app names like "Microsoft Teams" reliably.
-    static func snapshot() -> Set<String> {
+    public static func snapshot() -> Set<String> {
         guard let text = ReadOnlyCommand.output("/bin/ps", arguments: ["-axo", "comm="]) else { return [] }
         return Set(text.split(separator: "\n").map {
             $0.trimmingCharacters(in: .whitespaces).lowercased()
@@ -206,11 +199,11 @@ enum VolumeProbe {
     static func dataVolume() -> (total: Int64, free: Int64) {
         let url = URL(fileURLWithPath: NSHomeDirectory())
         guard let values = try? url.resourceValues(forKeys: [
-            .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey,
+            .volumeTotalCapacityKey, .volumeAvailableCapacityKey,
         ]) else { return (0, 0) }
         return (
             Int64(values.volumeTotalCapacity ?? 0),
-            values.volumeAvailableCapacityForImportantUsage ?? 0
+            Int64(values.volumeAvailableCapacity ?? 0)
         )
     }
 }

@@ -2,7 +2,7 @@ name: macOS build and tests
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "fix/**"]
 permissions:
   contents: read
 concurrency:
@@ -14,5 +14,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: scripts/compile-appicon.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macOS-app-icons
+          path: Resources/CompiledIcons/
       - run: swift build
       - run: swift test
+      - name: Verify app packaging
+        run: SIGN_ID=- scripts/package.sh
+      - run: codesign --verify --deep --strict dist/Reclaim.app

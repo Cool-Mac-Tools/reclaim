@@ -75,9 +75,9 @@ struct WorkspaceScene: NSViewRepresentable {
         private var zoneNodes: [WorkspaceKind: [SCNNode]] = [:]
         private var activeKinds: Set<WorkspaceKind> = []
         private let centers: [WorkspaceKind: SCNVector3] = [
-            .app: SCNVector3(-7, 0, -4), .tab: SCNVector3(0, 0, -6),
+            .app: SCNVector3(-4, 0, 0), .tab: SCNVector3(0, 0, -6),
             .file: SCNVector3(7, 0, -4), .terminal: SCNVector3(-7, 0, 4),
-            .agent: SCNVector3(0, 0, 6), .task: SCNVector3(7, 0, 4), .storage: SCNVector3(0, 0, 0)
+            .agent: SCNVector3(0, 0, 6), .task: SCNVector3(4, 0, 0), .storage: SCNVector3(0, 0, -5)
         ]
         init(select: @escaping (String?) -> Void) {
             self.select = select; super.init()
@@ -116,7 +116,7 @@ struct WorkspaceScene: NSViewRepresentable {
                 let node = SCNNode(geometry: base); node.position = center
                 scene.rootNode.addChildNode(node)
                 zoneNodes[kind, default: []].append(node)
-                let label = SCNText(string: kind == .storage ? "MY MAC" : kind.title.uppercased(), extrusionDepth: 0)
+                let label = SCNText(string: kind == .storage ? "MY MAC" : kind == .task ? "BACKGROUND" : kind.title.uppercased(), extrusionDepth: 0)
                 label.font = .systemFont(ofSize: 0.28, weight: .semibold)
                 label.firstMaterial?.diffuse.contents = kind.tint
                 let text = SCNNode(geometry: label)
@@ -165,6 +165,8 @@ struct WorkspaceScene: NSViewRepresentable {
                 let group = objects.filter { $0.kind == kind }.sorted {
                     if $0.focused != $1.focused { return $0.focused }
                     if ($0.state == .active) != ($1.state == .active) { return $0.state == .active }
+                    if $0.cpu != $1.cpu { return $0.cpu > $1.cpu }
+                    if $0.memory != $1.memory { return $0.memory > $1.memory }
                     return $0.id < $1.id
                 }
                 var visible = Array(group.prefix(kind == .storage ? 1 : 12))

@@ -8,8 +8,13 @@ struct HistoryView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        Group {
-            if model.history.isEmpty && model.purgeHistory.isEmpty {
+        VStack(spacing: 0) {
+            if let error = model.historyError {
+                Label(error, systemImage: "exclamationmark.triangle").font(.callout)
+                    .foregroundStyle(.orange).padding()
+                Button("Retry loading history") { model.loadQuarantine() }.padding(.bottom)
+            }
+            if model.history.isEmpty && model.purgeHistory.isEmpty && model.historyError == nil {
                 empty
             } else {
                 content
@@ -43,7 +48,7 @@ struct HistoryView: View {
             Section {
                 VStack(spacing: 16) {
                     HStack(spacing: 12) {
-                        StatCard(title: "Reclaimed all-time", value: Fmt.bytes(model.lifetimeReclaimed),
+                        StatCard(title: "Space recovered", value: model.historyError != nil && model.purgeHistory.isEmpty ? "Unavailable" : Fmt.bytes(model.lifetimeReclaimed),
                                  subtitle: "measured free-space increase",
                                  color: .green)
                         StatCard(title: "This month", value: Fmt.bytes(thisMonthBytes),
@@ -61,6 +66,12 @@ struct HistoryView: View {
                 .listRowSeparator(.hidden)
             }
 
+            if model.stagedBytes > 0 {
+                Section {
+                    Text("\(Fmt.bytes(model.stagedBytes)) is safely staged in quarantine. It still occupies disk space. Review Quarantine and empty it when you're ready to permanently recover that space.")
+                    Button("Review Quarantine") { model.section = .quarantine }
+                }
+            }
             Section("Verified recovery") {
                 ForEach(model.purgeHistory.reversed()) { entry in
                     HStack {

@@ -2,66 +2,6 @@ import SwiftUI
 import AppKit
 import ReclaimCore
 
-/// Owns the live system-health sampling for the Activity tab. Samples off the
-/// main thread on a gentle timer while the tab is visible, and maps process ids
-/// to their GUI app (for an icon and a graceful Quit). Read-only.
-@MainActor
-final class ActivityModel: ObservableObject {
-    @Published var health: SystemHealth?
-    @Published var diagnoses: [Diagnosis] = []
-    @Published var loading = false
-    /// pid → GUI app, for icons and quit. Non-GUI processes simply aren't here.
-    @Published private(set) var apps: [Int32: NSRunningApplication] = [:]
-
-    private let monitor = SystemMonitor()
-    private var timer: Timer?
-
-    func start() {
-        refresh()
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
-    }
-
-    func stop() { timer?.invalidate(); timer = nil }
-
-    func refresh() {
-        if health == nil { loading = true }
-        // Snapshot GUI apps on the main actor (AppKit), sample stats off-main.
-        let appMap = Dictionary(
-            NSWorkspace.shared.runningApplications.map { ($0.processIdentifier, $0) },
-            uniquingKeysWithFirst: ())
-        Task {
-            let h = await Task.detached(priority: .userInitiated) { [monitor] in
-                let s = monitor.sample()
-                return (s, monitor.diagnose(s))
-            }.value
-            self.health = h.0
-            self.diagnoses = h.1
-            self.apps = appMap
-            self.loading = false
-        }
-    }
-
-    func app(for pid: Int32) -> NSRunningApplication? { apps[pid] }
-
-    /// Gracefully quit a GUI app by pid (it can still prompt to save). We only
-    /// offer this for real apps we can resolve — never a blind `kill`.
-    func quit(pid: Int32) {
-        apps[pid]?.terminate()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.refresh() }
-    }
-}
-
-private extension Dictionary {
-    /// Build a dict from pairs, keeping the FIRST value on a key collision
-    /// (several helper processes can momentarily share… they won't, but be safe).
-    init(_ pairs: [(Key, Value)], uniquingKeysWithFirst: ()) {
-        self.init(pairs, uniquingKeysWith: { first, _ in first })
-    }
-}
-
 // MARK: - View
 
 /// "Activity" — what's running and, in plain language, why the Mac might feel
@@ -69,7 +9,8 @@ private extension Dictionary {
 /// the Reclaim tab.
 struct ActivityView: View {
     @EnvironmentObject var model: AppModel
-    @StateObject private var activity = ActivityModel()
+    @StateObject private var activity = WorkspaceModel()
+    @State private var search = ""
     @State private var sort: ProcessSort = .cpu
 
     enum ProcessSort: String, CaseIterable, Identifiable {
@@ -87,7 +28,10 @@ struct ActivityView: View {
         }
         .navigationTitle("Activity")
         .toolbar {
-            Button { model.section = .workspace } label: { Label("3D workspace", systemImage: "cube.transparent") }
+            Picker("View", selection: $model.activityDiagram) {
+                Label("List", systemImage: "list.bullet").tag(false)
+                Label("Diagram", systemImage: "cube.transparent").tag(true)
+            }.pickerStyle(.segmented).frame(width: 180)
             if activity.health != nil {
                 Button { activity.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
             }
@@ -106,34 +50,41 @@ struct ActivityView: View {
     }
 
     private func results(_ h: SystemHealth) -> some View {
-        let worst = activity.diagnoses.first?.severity ?? .ok
         let issues = activity.diagnoses.filter { $0.severity != .ok }
         return List {
             Section { verdict(h).listRowSeparator(.hidden) }
             Section { meters(h).listRowSeparator(.hidden) }
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 20))
 
-            if worst != .ok {
-                Section("Why it might be slow") {
+            if !issues.isEmpty {
+                Section("Insights & next steps") {
                     ForEach(issues) { diagnosisRow($0) }
                 }
             }
 
-            Section {
-                ForEach(topProcesses(h)) { processRow($0, total: h.totalMemoryBytes) }
-            } header: {
-                HStack {
-                    Text("What's using your Mac")
-                    Spacer()
-                    Picker("Sort", selection: $sort) {
-                        ForEach(ProcessSort.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented).labelsHidden().frame(width: 150)
+            if model.activityDiagram {
+                Section {
+                    WorkspaceView(workspace: activity).frame(minHeight: 500)
+                        .listRowInsets(EdgeInsets())
                 }
-            } footer: {
-                Text("Live — refreshes every few seconds. CPU is recent usage; 100% is one full core. Quitting is graceful.")
-                    .font(.caption).foregroundStyle(.secondary).textCase(nil)
+            } else {
+                Section {
+                    TextField("Find an app or background process", text: $search)
+                    ForEach(topProcesses(h)) { processRow($0, total: h.totalMemoryBytes) }
+                } header: {
+                    HStack {
+                        Text("Apps & background processes · \(activity.groups.count) groups")
+                        Spacer()
+                        Picker("Sort", selection: $sort) {
+                            ForEach(ProcessSort.allCases) { Text($0.rawValue).tag($0) }
+                        }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                    }
+                } footer: {
+                    Text("All \(h.processes.count) sampled processes, grouped by app including helpers. CPU: 100% equals one core. Memory is summed resident usage and may include shared pages. Updated \(h.sampledAt.formatted(date: .omitted, time: .standard)).")
+                        .font(.caption).foregroundStyle(.secondary).textCase(nil)
+                }
             }
+
         }
         .listStyle(.inset)
     }
@@ -160,7 +111,7 @@ struct ActivityView: View {
         switch s {
         case .ok:       "Your Mac looks healthy"
         case .info:     "A few things worth a look"
-        case .warning:  "Here's what's slowing your Mac"
+        case .warning:  "Things that may affect performance"
         case .critical: "Your Mac needs attention"
         }
     }
@@ -218,6 +169,12 @@ struct ActivityView: View {
                 Text(d.title).fontWeight(.medium)
                 Text(d.detail).font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if d.id.hasPrefix("memory") || d.id == "hog-cpu" || d.id == "cpu" {
+                    Button(d.id.hasPrefix("memory") ? "Review memory use" : "Review CPU use") {
+                        sort = d.id.hasPrefix("memory") ? .memory : .cpu
+                        model.activityDiagram = false; search = ""
+                    }.buttonStyle(.bordered).controlSize(.small)
+                }
                 if d.reclaimActionable {
                     Button("Reclaim space") { model.section = .scan }
                         .buttonStyle(.borderedProminent).controlSize(.small).padding(.top, 2)
@@ -228,7 +185,7 @@ struct ActivityView: View {
         .padding(.vertical, 3)
     }
 
-    private func processRow(_ p: RunningProcess, total: Int64) -> some View {
+    private func processRow(_ p: ActivityProcessGroup, total: Int64) -> some View {
         let byCPU = sort == .cpu
         // Honest, absolute fractions: CPU vs one core, memory vs total RAM.
         let fraction = byCPU ? min(1, p.cpuPercent / 100) : Double(p.memoryBytes) / Double(max(1, total))
@@ -238,7 +195,7 @@ struct ActivityView: View {
         let secondary = byCPU ? Fmt.bytes(p.memoryBytes) : "\(Int(p.cpuPercent.rounded()))% CPU"
 
         return HStack(spacing: 11) {
-            if let icon = activity.app(for: p.pid)?.icon {
+            if let icon = activity.apps[p.id]?.icon {
                 Image(nsImage: icon).resizable().frame(width: 26, height: 26)
             } else {
                 Image(systemName: "gearshape.2")
@@ -247,6 +204,7 @@ struct ActivityView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(p.name).lineLimit(1)
+                    Text("\(p.processes.count)").font(.caption2).foregroundStyle(.tertiary)
                     Spacer(minLength: 8)
                     Text(primary).font(.callout.weight(.semibold)).monospacedDigit()
                         .foregroundStyle(hot ? .red : .primary)
@@ -257,8 +215,8 @@ struct ActivityView: View {
                         .frame(width: 70, alignment: .trailing)
                 }
             }
-            if activity.app(for: p.pid) != nil {
-                Button("Quit") { activity.quit(pid: p.pid) }
+            if activity.apps[p.id]?.activationPolicy == .regular && activity.apps[p.id]?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                Button("Quit") { activity.quit(p) }
                     .buttonStyle(.bordered).controlSize(.small)
             }
         }
@@ -267,11 +225,13 @@ struct ActivityView: View {
 
     // MARK: Helpers
 
-    private func topProcesses(_ h: SystemHealth) -> [RunningProcess] {
-        let sorted = sort == .cpu
-            ? h.processes.sorted { $0.cpuPercent > $1.cpuPercent }
-            : h.processes.sorted { $0.memoryBytes > $1.memoryBytes }
-        return Array(sorted.prefix(14))
+    private func topProcesses(_ h: SystemHealth) -> [ActivityProcessGroup] {
+        let groups = activity.groups.filter { search.isEmpty || ($0.name + " " + $0.id).localizedCaseInsensitiveContains(search) }
+        return groups.sorted {
+            let a = sort == .cpu ? $0.cpuPercent : Double($0.memoryBytes)
+            let b = sort == .cpu ? $1.cpuPercent : Double($1.memoryBytes)
+            return a == b ? $0.id < $1.id : a > b
+        }
     }
 
     private func severityColor(_ s: Diagnosis.Severity) -> Color {

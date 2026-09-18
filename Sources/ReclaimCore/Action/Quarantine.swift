@@ -143,8 +143,14 @@ public struct Quarantine: Sendable {
 
     /// All quarantine session IDs on disk, newest-looking first.
     public static func sessions(home: String = NSHomeDirectory()) -> [String] {
+        (try? readSessions(home: home)) ?? []
+    }
+
+    public static func readSessions(home: String = NSHomeDirectory()) throws -> [String] {
         let root = (home as NSString).appendingPathComponent(".reclaim/quarantine")
-        let entries = (try? FileManager.default.contentsOfDirectory(atPath: root)) ?? []
+        let entries: [String]
+        do { entries = try FileManager.default.contentsOfDirectory(atPath: root) }
+        catch let error as CocoaError where error.code == .fileReadNoSuchFile { return [] }
         return entries.filter { !$0.hasPrefix(".") }.sorted(by: >)
     }
 }

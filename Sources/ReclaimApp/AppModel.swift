@@ -15,13 +15,11 @@ final class AppModel: ObservableObject {
         case quarantine = "Quarantine"
         case history    = "History"
         case ai         = "AI"
-        case workspace  = "Workspace"
         var id: String { rawValue }
         var symbol: String {
             switch self {
             case .scan:       "arrow.clockwise"
             case .myMac:      "internaldrive"
-            case .workspace:  "cube.transparent"
             case .activity:   "speedometer"
             case .quarantine: "arrow.uturn.backward.circle"
             case .history:    "chart.bar.xaxis"
@@ -34,6 +32,43 @@ final class AppModel: ObservableObject {
 
     // Unified scan state
     @Published var scanning = false
+    @Published var scanStartedAt: Date?
+    @Published var scanStage = "Preparing scan…"
+    @Published var scanCompletedStages = 0
+    @Published var runningExecutables: Set<String> = []
+    @Published var historyError: String?
+    @Published var activityDiagram = false
+    private var appObservers: [NSObjectProtocol] = []
+
+    func startObservingApps() {
+        guard appObservers.isEmpty else { return }
+        refreshRunningApps()
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification,
+                     NSWorkspace.didActivateApplicationNotification] {
+            appObservers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.refreshRunningApps() }
+            })
+        }
+    }
+
+    func refreshRunningApps() {
+        let paths = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.compactMap { $0.bundleURL?.path }
+        Task {
+            runningExecutables = await Task.detached { RunningProcessProbe.snapshot() }.value
+            _ = await Task.detached { try? AppUsageStore().record(paths: paths) }.value
+            unusedApps.removeAll { app in paths.contains(app.path) }
+        }
+    }
+
+    func scanEstimate(at date: Date) -> String {
+        let elapsed = max(0, date.timeIntervalSince(scanStartedAt ?? date))
+        let previous = UserDefaults.standard.double(forKey: "scan.lastDuration")
+        let expected = previous > 0 ? previous : 120
+        let remaining = expected - elapsed
+        let elapsedText = "\(Int(elapsed))s elapsed"
+        if remaining <= 0 { return elapsedText + " · Taking longer than estimated; still scanning" }
+        return elapsedText + " · About \(max(1, Int(ceil(remaining / 60)))) min remaining" + (previous > 0 ? " (based on your last scan)" : " (first-scan estimate)")
+    }
     @Published var hasScanned = false
     @Published var scanReport: ScanReport?
     @Published var orphans: [Orphan] = []
@@ -49,6 +84,7 @@ final class AppModel: ObservableObject {
 
     // "My Mac" whole-disk storage map (read-only overview of everything).
     @Published var mapping = false
+    @Published var mapStartedAt: Date?
     @Published var hasMapped = false
     @Published var mapReport: MacStorageReport?
     @Published var mapProgressFiles = 0   // live file count during the walk
@@ -203,22 +239,32 @@ final class AppModel: ObservableObject {
     // MARK: - Unified scan
 
     func runEverything() {
-        guard !scanning else { return }
+        guard !scanning, busy == nil else { return }
         // A scan here also refreshes the "My Mac" overview, so both tabs stay
         // in sync — you can start from either one.
-        mapMac()
+        refreshFDA()
+        refreshRunningApps()
         scanning = true
+        scanStartedAt = Date()
+        scanCompletedStages = 0
+        scanStage = "Checking caches and app data…"
         hasScanned = false
         scanReport = nil; orphans = []; review = nil; repos = []; unusedApps = []
         selected = []; extraTargets = [:]
 
         Task {
-            async let scan = Self.doScan()
-            async let orph = Self.doOrphans()
-            async let rev  = Self.doReview()
-            async let rp   = Self.doRepos()
-            async let ua   = Self.doUnusedApps()
-            let (s, o, r, rpo, uap) = await (scan, orph, rev, rp, ua)
+            let s = await Task.detached(priority: .userInitiated) {
+                StorageScanner().scan { name in Task { @MainActor in self.scanStage = "Checking \(name)…" } }
+            }.value
+            scanCompletedStages = 1; scanStage = "Checking installed apps and last use…"
+            let uap = await Self.doUnusedApps()
+            scanCompletedStages = 2; scanStage = "Checking leftovers from removed apps…"
+            let o = await Self.doOrphans()
+            scanCompletedStages = 3; scanStage = "Finding old and large personal files…"
+            let r = await Self.doReview()
+            scanCompletedStages = 4; scanStage = "Finding rebuildable project data…"
+            let rpo = await Self.doRepos()
+            scanCompletedStages = 5; scanStage = "Preparing your results…"
             // Which tool commands are actually usable — resolved via the login
             // shell so nvm/pyenv/Homebrew paths are found.
             let neededTools = Set(s.findings
@@ -235,8 +281,10 @@ final class AppModel: ObservableObject {
             self.freeBytes = s.volumeFreeBytes
             self.totalBytes = s.volumeTotalBytes
             self.selected = Set(self.items.filter(\.safe).map(\.id))
+            if let started = scanStartedAt { UserDefaults.standard.set(Date().timeIntervalSince(started), forKey: "scan.lastDuration") }
             self.scanning = false
             self.hasScanned = true
+            self.mapMac()
         }
     }
 
@@ -246,6 +294,7 @@ final class AppModel: ObservableObject {
     func mapMac() {
         guard !mapping else { return }
         mapping = true
+        mapStartedAt = Date()
         mapProgressFiles = 0
         Task {
             let report = await Task.detached(priority: .userInitiated) {
@@ -254,6 +303,7 @@ final class AppModel: ObservableObject {
                 })
             }.value
             self.mapReport = report
+            self.fdaStatus = report.fullDiskAccess
             // Remember the file count so the next scan's progress bar can fill
             // against a real target instead of guessing.
             UserDefaults.standard.set(report.totalFileCount, forKey: Self.lastFileCountKey)
@@ -311,19 +361,23 @@ final class AppModel: ObservableObject {
             // Can we actually remove it? Root/other-owned items (e.g. a cache
             // made by `sudo npm`) can't be touched without admin — mark them
             // non-selectable with a clear reason instead of failing silently.
+            let requiredApps = CleanupExecutor.requiredApps(path: f.path, source: f.recipeID)
+            let stateAvailable = requiredApps.isEmpty || !runningExecutables.isEmpty
+            let blocking = AppProcessMatcher.running(requiredApps, executables: runningExecutables)
             let removable = CleanupExecutor.isRemovable(f.path)
             // Pre-select both Green (regenerable) and Blue (reversible/
             // re-downloadable) — both are safe and undoable via quarantine.
             // Yellow (history) and Orange (personal) stay review-only.
             let safe = (f.riskTier == .green || f.riskTier == .blue)
-                     && !f.blockingAppRunning && removable
-            let selectable = f.riskTier != .red && !f.blockingAppRunning && removable
-            let note = !removable ? "Owned by the system or another account — needs admin rights to remove. "
-                     : f.blockingAppRunning ? "Quit the owning app first — then this can be cleaned. "
+                     && blocking.isEmpty && removable && stateAvailable
+            let selectable = f.riskTier != .red && blocking.isEmpty && removable && stateAvailable && f.recipeID != "app.messages.attachments"
+            let note = !stateAvailable ? "Could not verify whether the owning app is running. Try again before cleaning. "
+                     : !removable ? "Owned by the system or another account — needs admin rights to remove. "
+                     : !blocking.isEmpty ? "Quit the owning app first — then this can be cleaned. "
                      : f.riskTier == .red ? "System-protected. Reclaim reports it but never removes it. " : ""
             out.append(CleanItem(id: f.path, name: f.displayName, detail: note + f.explanation,
                                  bytes: f.allocatedBytes, tier: f.riskTier, source: f.recipeID,
-                                 selectable: selectable, safe: safe, blockingApps: f.blockingApps,
+                                 selectable: selectable, safe: safe, blockingApps: blocking,
                                  impact: f.impact, recurrence: f.recurrence,
                                  isDirectory: DirLister.isDirectory(f.path)))
         }
@@ -353,8 +407,8 @@ final class AppModel: ObservableObject {
             // bundle, so no piece-by-piece browsing.
             out.append(CleanItem(id: a.path, name: a.name,
                                  detail: a.rationale(), bytes: a.bytes, tier: .orange,
-                                 source: "unused-app",
-                                 selectable: CleanupExecutor.isRemovable(a.path), safe: false,
+                                 source: a.usageUnknown ? "large-app" : "unused-app",
+                                 selectable: CleanupExecutor.isRemovable(a.path) && !AppProcessMatcher.isRunning(appPath: a.path, executables: runningExecutables), safe: false,
                                  isDirectory: false, subtitle: a.subtitle()))
         }
         // De-dup by path (orphans already exclude recipe paths, but be safe).
@@ -429,22 +483,22 @@ final class AppModel: ObservableObject {
     /// jumps to Quarantine so the stage→empty step is obvious, and rescans.
     func reclaim(_ targets: [CleanupTarget]) {
         guard !targets.isEmpty, busy == nil else { return }
+        do { _ = try LedgerStore().all() }
+        catch { actionAlert = "History is unavailable. Cleanup is paused to protect your records. \(error.localizedDescription)"; return }
         busy = "Reclaiming \(targets.count) item(s)…"
         Task {
             let entry = await Task.detached(priority: .userInitiated) {
                 let df = DateFormatter(); df.dateFormat = "yyyyMMdd-HHmmss"
-                return CleanupExecutor(greenOnly: false).run(targets, sessionID: df.string(from: Date()))
+                return CleanupExecutor(greenOnly: false).run(targets, sessionID: df.string(from: Date()) + "-" + UUID().uuidString)
             }.value
             let moved = entry.results.filter { $0.status == .quarantined }
             let skipped = entry.results.filter { $0.status != .quarantined }
 
             if !moved.isEmpty {
-                try? LedgerStore().append(entry)          // only log real sessions
+                do { try LedgerStore().append(entry) }
+                catch { historyError = "Cleanup was saved in quarantine, but its history could not be recorded. Your existing history was preserved. \(error.localizedDescription)" }
                 self.lastStagedBytes = entry.quarantinedBytes
                 self.lastFreedBytes = nil                 // staged, not yet freed
-            } else {
-                // Nothing moved — don't leave an empty session dir behind.
-                try? Quarantine(sessionID: entry.sessionID).purge()
             }
             self.busy = nil
             self.loadQuarantine()
@@ -494,7 +548,7 @@ final class AppModel: ObservableObject {
         let ws = NSWorkspace.shared
         func matches(_ app: NSRunningApplication) -> Bool {
             let n = app.localizedName ?? ""
-            return names.contains { n == $0 || n.localizedCaseInsensitiveContains($0) }
+            return names.contains { n.caseInsensitiveCompare($0) == .orderedSame || AppProcessMatcher.matches(app.executableURL?.path ?? "", appName: $0) }
         }
         ws.runningApplications.filter(matches).forEach { $0.terminate() }
         for _ in 0..<25 {   // up to ~5s
@@ -584,31 +638,43 @@ final class AppModel: ObservableObject {
         let entry = CleanupLedgerEntry(
             sessionID: "photos-" + df.string(from: Date()), startedAt: Date(),
             results: results, freeBeforeBytes: free, freeAfterBytes: free, snapshotsPresent: 0)
-        try? LedgerStore().append(entry)
+        do { try LedgerStore().append(entry) }
+        catch { historyError = "Could not record the Photos action. Existing history was preserved. \(error.localizedDescription)" }
     }
 
     // MARK: - Quarantine
 
     func loadQuarantine() {
-        var summaries: [QuarantineSummary] = []
-        for id in Quarantine.sessions() {
-            guard let manifest = try? Quarantine(sessionID: id).manifest() else { continue }
-            let entries = manifest.filter { FileManager.default.fileExists(atPath: $0.quarantinePath) }
-            // Purge stale empty sessions (left by failed moves) so they don't
-            // show as confusing "0 items" rows.
-            guard !entries.isEmpty else { try? Quarantine(sessionID: id).purge(); continue }
-            summaries.append(QuarantineSummary(
-                id: id, count: entries.count,
-                bytes: entries.reduce(0) { $0 + $1.bytes }, entries: entries))
+        do {
+            var summaries: [QuarantineSummary] = []
+            for id in try Quarantine.readSessions() {
+                let manifest = try Quarantine(sessionID: id).manifest()
+                var entries: [QuarantineEntry] = []
+                for entry in manifest {
+                    do {
+                        _ = try FileManager.default.attributesOfItem(atPath: entry.quarantinePath)
+                        entries.append(entry)
+                    } catch let error as CocoaError where error.code == .fileReadNoSuchFile { continue }
+                }
+                if !entries.isEmpty {
+                    summaries.append(QuarantineSummary(id: id, count: entries.count,
+                        bytes: entries.reduce(0) { $0 + $1.bytes }, entries: entries))
+                }
+            }
+            let loadedPurges = try PurgeLedgerStore().all()
+            let loadedHistory = try LedgerStore().all()
+            sessions = summaries
+            purgeHistory = loadedPurges
+            lifetimeReclaimed = loadedPurges.reduce(0) { $0 + $1.verifiedFreedBytes }
+            history = loadedHistory.reversed()
+            historyError = nil
+        } catch {
+            historyError = "History could not be refreshed. The last loaded totals are still shown; no records were reset. \(error.localizedDescription)"
         }
-        sessions = summaries
-        let ledger = LedgerStore()
-        purgeHistory = (try? PurgeLedgerStore().all()) ?? []
-        lifetimeReclaimed = purgeHistory.reduce(0) { $0 + $1.verifiedFreedBytes }
-        history = ledger.all().reversed()   // newest first
     }
 
     func restore(_ id: String) {
+        guard busy == nil else { return }
         busy = "Restoring…"
         Task {
             let result: (restored: [String], failed: [String])
@@ -643,6 +709,8 @@ final class AppModel: ObservableObject {
 
     private func emptyQuarantine(ids: [String], label: String) {
         guard busy == nil else { return }
+        do { _ = try PurgeLedgerStore().all() }
+        catch { actionAlert = "Recovery history is unavailable. Emptying quarantine is paused to protect your records. \(error.localizedDescription)"; return }
         busy = label
         Task {
             let outcome = await Task.detached(priority: .userInitiated) {
