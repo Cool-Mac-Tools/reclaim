@@ -143,7 +143,7 @@ public struct SystemMonitor: Sendable {
         // Memory pressure / swap thrash.
         if h.swapUsedBytes > 3 * 1024 * 1024 * 1024 || (h.memoryUsedFraction > 0.9 && h.swapUsedBytes > 1024 * 1024 * 1024) {
             out.append(Diagnosis(
-                id: "memory", severity: h.swapUsedBytes > 6 * 1024 * 1024 * 1024 ? .critical : .warning,
+                id: "memory", severity: h.memoryUsedFraction > 0.9 ? .warning : .info,
                 title: "Your Mac is using disk space for memory",
                 detail: "\(ByteFormatter.string(h.swapUsedBytes)) of swap is in use. Swap can remain after a busy period; it does not by itself prove current memory pressure. If your Mac feels slow, review the largest memory users below.",
                 symbol: "memorychip"))

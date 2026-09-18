@@ -128,3 +128,13 @@ import Foundation
         #expect(MacStorageMap.atomicBundleRoot("/Applications/Example.APP/Contents/MacOS/run") == "/Applications/Example.APP")
     }
 }
+
+@Suite struct HistoryCompatibilityTests {
+    @Test func originalRecoveryHistoryStillDecodesAfterAddingToolCleanups() throws {
+        let json = #"[{"id":"old","date":"2026-09-17T12:00:00Z","succeeded":["one"],"failed":[],"deletedBytes":500,"freeBeforeBytes":100,"freeAfterBytes":400}]"#
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let entries = try decoder.decode([PurgeLedgerEntry].self, from: Data(json.utf8))
+        #expect(entries.first?.operation == nil)
+        #expect(entries.first?.verifiedFreedBytes == 300)
+    }
+}

@@ -61,16 +61,24 @@ public enum SupportedCLI {
 
     public struct RunResult: Sendable {
         public let freedBytes: Int64
+        public let deletedBytes: Int64
+        public let freeBeforeBytes: Int64
+        public let freeAfterBytes: Int64
         public let succeeded: Bool
         public let output: String
     }
 
     /// Run the command and measure the real free-space delta.
     public static func run(_ command: Command) -> RunResult {
+        let paths = RecipeCatalog.all.first { $0.id == command.recipeID }?.paths.flatMap { PathResolver.resolve($0) } ?? []
+        let allocatedBefore = paths.reduce(Int64(0)) { $0 + SizeMeasurement.measure($1).allocatedBytes }
         let before = Volume.freeBytes()
         let r = shell(command.invocation)
         let after = Volume.freeBytes()
-        return RunResult(freedBytes: max(0, after - before),
+        let allocatedAfter = paths.reduce(Int64(0)) { $0 + SizeMeasurement.measure($1).allocatedBytes }
+        let deleted = max(0, allocatedBefore - allocatedAfter)
+        return RunResult(freedBytes: r.code == 0 ? min(deleted, max(0, after - before)) : 0,
+                         deletedBytes: deleted, freeBeforeBytes: before, freeAfterBytes: after,
                          succeeded: r.code == 0,
                          output: String(r.text.suffix(1500)))
     }

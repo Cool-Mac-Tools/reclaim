@@ -71,10 +71,9 @@ See the product master plan for the full roadmap.
 
 ## Live workspace & verified recovery
 
-Reclaim includes a navigable native 3D Workspace connected to My Mac and Activity.
-It shows running apps and resource use, with explicit window/browser/folder connections
-and a local agent/task event bridge. See [WORKSPACE.md](WORKSPACE.md) for setup,
-coverage, controls, and integration examples.
+Activity includes a process list and a navigable 3D diagram of the same live
+system measurements. Both views share app/helper groups, resource use and
+actionable insights. See [WORKSPACE.md](WORKSPACE.md) for coverage and controls.
 
 Recovery history now distinguishes quarantined data from measured space freed after
 permanent deletion. Tests and macOS CI cover event expiry, corrupt feeds/manifests,

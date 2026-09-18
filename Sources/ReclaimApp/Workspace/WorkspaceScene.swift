@@ -97,10 +97,10 @@ struct WorkspaceScene: NSViewRepresentable {
             // A small desktop computer anchors the world at the measured startup volume.
             let stand = SCNNode(geometry: SCNBox(width: 0.3, height: 0.7, length: 0.3, chamferRadius: 0.06))
             stand.geometry?.firstMaterial?.diffuse.contents = NSColor.gray
-            stand.position = SCNVector3(0, 0.4, -0.25); scene.rootNode.addChildNode(stand)
+            stand.position = SCNVector3(0, 0.4, -5.25); scene.rootNode.addChildNode(stand)
             let foot = SCNNode(geometry: SCNBox(width: 1.6, height: 0.12, length: 0.75, chamferRadius: 0.08))
             foot.geometry?.firstMaterial?.diffuse.contents = NSColor.gray
-            foot.position = SCNVector3(0, 0.12, -0.25); scene.rootNode.addChildNode(foot)
+            foot.position = SCNVector3(0, 0.12, -5.25); scene.rootNode.addChildNode(foot)
             zoneNodes[.storage] = [stand, foot]
             for x in stride(from: -11.0, through: 11.0, by: 1.0) {
                 addLine(SCNVector3(x, -0.135, -9), SCNVector3(x, -0.135, 9), color: NSColor.white.withAlphaComponent(0.045))
@@ -122,7 +122,7 @@ struct WorkspaceScene: NSViewRepresentable {
                 let text = SCNNode(geometry: label)
                 text.eulerAngles.x = -.pi / 2
                 text.position = SCNVector3(center.x - 2.4, 0.09, center.z + 1.65)
-                if kind == .storage { text.position.x = -1.1; text.position.z = 1.15 }
+                if kind == .storage { text.position.x = -1.1; text.position.z = center.z + 1.15 }
                 scene.rootNode.addChildNode(text)
                 zoneNodes[kind, default: []].append(text)
                 if kind != .storage {
@@ -136,7 +136,7 @@ struct WorkspaceScene: NSViewRepresentable {
                     zoneNodes[kind, default: []].append(empty)
                 }
                 if kind != .storage {
-                    let line = addLine(SCNVector3(0, -0.09, 0), center, color: kind.tint.withAlphaComponent(0.25))
+                    let line = addLine(SCNVector3(0, -0.09, -5), center, color: kind.tint.withAlphaComponent(0.25))
                     zoneNodes[kind, default: []].append(line)
                 }
             }
@@ -266,7 +266,7 @@ struct WorkspaceScene: NSViewRepresentable {
             if let pid = object.pid, let icon = NSRunningApplication(processIdentifier: pid)?.icon {
                 icon.draw(in: NSRect(x: 396, y: 156, width: 58, height: 58))
             }
-            text(object.focused ? "FOCUSED" : object.kind.title.uppercased(), y: 178, size: 19, color: object.kind.tint, weight: .bold)
+            text(object.focused ? "FOCUSED" : object.kind == .task ? "BACKGROUND" : object.kind.title.uppercased(), y: 178, size: 19, color: object.kind.tint, weight: .bold)
             text(object.title, y: 112, size: 44, color: .white, weight: .semibold)
             text(object.detail, y: 72, size: 23, color: NSColor.white.withAlphaComponent(0.65))
             text(object.state == .active ? "●  ACTIVE" : object.state.rawValue.uppercased(), y: 22, size: 17, color: object.kind.tint)

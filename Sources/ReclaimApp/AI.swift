@@ -269,8 +269,10 @@ struct AISparkButton: View {
         Button(action: action) {
             Image(systemName: "sparkles")
                 .font(.callout).foregroundStyle(.tint)
+                .frame(width: 24, height: 24).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
+        .accessibilityLabel("Ask AI about this item")
         .help("Ask AI: what is this, and is it safe to delete?")
     }
 }

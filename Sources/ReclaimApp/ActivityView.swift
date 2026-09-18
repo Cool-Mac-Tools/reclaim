@@ -11,6 +11,7 @@ struct ActivityView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var activity = WorkspaceModel()
     @State private var search = ""
+    @State private var showInsights = true
     @State private var sort: ProcessSort = .cpu
 
     enum ProcessSort: String, CaseIterable, Identifiable {
@@ -38,6 +39,7 @@ struct ActivityView: View {
         }
         .onAppear { activity.start() }
         .onDisappear { activity.stop() }
+        .onChange(of: model.activityDiagram) { _, diagram in showInsights = !diagram }
     }
 
     private var loading: some View {
@@ -50,43 +52,43 @@ struct ActivityView: View {
     }
 
     private func results(_ h: SystemHealth) -> some View {
-        let issues = activity.diagnoses.filter { $0.severity != .ok }
-        return List {
-            Section { verdict(h).listRowSeparator(.hidden) }
-            Section { meters(h).listRowSeparator(.hidden) }
-                .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 8, trailing: 20))
-
-            if !issues.isEmpty {
-                Section("Insights & next steps") {
-                    ForEach(issues) { diagnosisRow($0) }
-                }
-            }
-
+        VStack(spacing: 12) {
+            verdict(h).padding(.horizontal, 20).padding(.top, 16)
+            meters(h).padding(.horizontal, 20)
+            DisclosureGroup(isExpanded: $showInsights) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(activity.diagnoses) { diagnosisRow($0) }
+                    }.padding(.top, 10)
+                }.frame(maxHeight: 170)
+            } label: {
+                Text("Insights & next steps · \(activity.diagnoses.count)").font(.callout.weight(.medium))
+            }.padding(.horizontal, 24)
             if model.activityDiagram {
-                Section {
-                    WorkspaceView(workspace: activity).frame(minHeight: 500)
-                        .listRowInsets(EdgeInsets())
-                }
+                WorkspaceView(workspace: activity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16).padding(.bottom, 12)
             } else {
-                Section {
-                    TextField("Find an app or background process", text: $search)
-                    ForEach(topProcesses(h)) { processRow($0, total: h.totalMemoryBytes) }
-                } header: {
-                    HStack {
-                        Text("Apps & background processes · \(activity.groups.count) groups")
-                        Spacer()
-                        Picker("Sort", selection: $sort) {
-                            ForEach(ProcessSort.allCases) { Text($0.rawValue).tag($0) }
-                        }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                List {
+                    Section {
+                        TextField("Find an app or background process", text: $search)
+                        ForEach(topProcesses(h)) { processRow($0, total: h.totalMemoryBytes) }
+                    } header: {
+                        HStack {
+                            Text("Apps & background processes · \(activity.groups.count) groups")
+                            Spacer()
+                            Picker("Sort", selection: $sort) {
+                                ForEach(ProcessSort.allCases) { Text($0.rawValue).tag($0) }
+                            }.pickerStyle(.segmented).labelsHidden().frame(width: 150)
+                        }
+                    } footer: {
+                        Text("All \(h.processes.count) sampled processes, grouped by app including helpers. CPU: 100% equals one core. Memory is summed resident usage and may include shared pages.")
+                            .font(.caption).foregroundStyle(.secondary).textCase(nil)
                     }
-                } footer: {
-                    Text("All \(h.processes.count) sampled processes, grouped by app including helpers. CPU: 100% equals one core. Memory is summed resident usage and may include shared pages. Updated \(h.sampledAt.formatted(date: .omitted, time: .standard)).")
-                        .font(.caption).foregroundStyle(.secondary).textCase(nil)
-                }
+                }.listStyle(.inset)
             }
-
         }
-        .listStyle(.inset)
     }
 
     // MARK: Verdict
@@ -118,7 +120,9 @@ struct ActivityView: View {
 
     private func meters(_ h: SystemHealth) -> some View {
         let memF = h.memoryUsedFraction
-        let cpuF = min(1, h.loadAverage1 / Double(max(1, h.coreCount)))
+        let cpuRatio = h.loadAverage1 / Double(max(1, h.coreCount))
+        let cpuF = min(1, cpuRatio)
+        let cpuColor: Color = cpuRatio >= 2.5 ? .red : cpuRatio >= 1.5 ? .orange : .blue
         let diskF = h.diskUsedFraction
         return HStack(spacing: 12) {
             MeterCard(title: "Memory", value: "\(Int((memF * 100).rounded()))%",
@@ -126,13 +130,13 @@ struct ActivityView: View {
                 UsageBar(fraction: memF, color: barColor(memF))
             }
             MeterCard(title: "CPU load", value: String(format: "%.1f", h.loadAverage1),
-                      caption: cpuCaption(h), valueColor: valueColor(cpuF)) {
-                UsageBar(fraction: cpuF, color: barColor(cpuF))
+                      caption: cpuCaption(h), valueColor: cpuColor) {
+                UsageBar(fraction: cpuF, color: cpuColor)
             }
             MeterCard(title: "Storage", value: "\(Int((diskF * 100).rounded()))%",
                       caption: "\(Fmt.bytes(h.freeDiskBytes)) free of \(Fmt.bytes(h.totalDiskBytes))",
-                      valueColor: valueColor(diskF)) {
-                UsageBar(fraction: diskF, color: barColor(diskF))
+                      valueColor: diskF >= 0.97 ? .red : diskF >= 0.90 ? .orange : .primary) {
+                UsageBar(fraction: diskF, color: diskF >= 0.97 ? .red : diskF >= 0.90 ? .orange : .blue)
             }
         }
     }

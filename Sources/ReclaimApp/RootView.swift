@@ -20,6 +20,9 @@ struct RootView: View {
             } detail: {
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // The embedded split view keeps a title-bar inset below
+                    // the access banner; keep the first content row below it.
+                    .padding(.top, model.needsFullDiskAccess ? 52 : 0)
                     .overlay(alignment: .top) { busyBanner }
             }
         }

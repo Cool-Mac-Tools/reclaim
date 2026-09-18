@@ -159,6 +159,12 @@ struct MyMacView: View {
 
     private func header(_ report: MacStorageReport) -> some View {
         VStack(spacing: 14) {
+            HStack {
+                Text("Storage snapshot · \(report.scannedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if model.mapping { Text("Updating…").font(.caption).foregroundStyle(.secondary) }
+            }
             HStack(spacing: 12) {
                 StatCard(title: "Used", value: Fmt.bytes(report.usedBytes),
                          subtitle: "of \(Fmt.bytes(report.capacityBytes))", color: .primary)
@@ -250,8 +256,7 @@ struct MyMacView: View {
                + "categories plus “System & Other” always add up to \(Fmt.bytes(report.usedBytes)).")
             Text("As of \(report.scannedAt.formatted(.relative(presentation: .named))) · "
                + "\(report.totalFileCount.formatted()) files in "
-               + "\(String(format: "%.1f", report.elapsedSeconds))s. Viewing only — "
-               + "use the Scan tab to reclaim space safely.")
+               + "\(String(format: "%.1f", report.elapsedSeconds))s. Open a category to review files and move selected items to quarantine.")
         }
         .font(.caption).foregroundStyle(.secondary).textCase(nil)
     }

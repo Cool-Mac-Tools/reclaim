@@ -108,6 +108,9 @@ public struct CleanupExecutor: Sendable {
         var results: [ActionResult] = []
 
         let running = RunningProcessProbe.snapshot()
+        let guardedPaths = RecipeCatalog.all.filter { !$0.requiresQuit.isEmpty }.flatMap { recipe in
+            recipe.paths.flatMap { PathResolver.resolve($0) }.map { ($0, recipe.requiresQuit) }
+        }
         var handled = Set<String>()
         for target in targets.sorted(by: { $0.path.count < $1.path.count }) {
             let canonical = AppDiscovery.canonicalPath(target.path)
@@ -134,7 +137,13 @@ public struct CleanupExecutor: Sendable {
                                      detail: "\(target.riskTier.displayName) needs explicit review; not auto-cleaned."))
                 continue
             }
-            let required = Self.requiredApps(path: target.path, source: target.source)
+            var required = Self.requiredApps(path: target.path, source: target.source)
+            // Parent-folder cleanup must inherit child recipes' quit gates.
+            // A generic cache row must not bypass a specific app's protection.
+            for (path, names) in guardedPaths where canonical == path || canonical.hasPrefix(path + "/") || path.hasPrefix(canonical + "/") {
+                required += names
+            }
+            required = Array(Set(required))
             if running.isEmpty && (!required.isEmpty || AppDiscovery.isUserApplication(canonical, home: home)) {
                 results.append(.init(path: target.path, status: .skippedAppRunning, bytes: 0,
                                      detail: "Could not verify running apps. Retry when process information is available."))

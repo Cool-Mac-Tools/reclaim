@@ -76,6 +76,8 @@ struct CategoryBrowser: View {
     @State private var viewMode: ViewMode = .list
     @State private var quickLook: PreviewItem?          // inline Quick Look sheet
     @State private var aiRequest: AppModel.AIRequest?   // this sheet presents its own AI popup
+    @State private var eligiblePaths: Set<String> = []
+    @State private var checkingPermissions = true
     @State private var showPhotoBrowser = false         // PhotoKit asset-level browser
 
     enum Sort: String, CaseIterable, Identifiable {
@@ -110,11 +112,23 @@ struct CategoryBrowser: View {
     /// Removable = not a library/app bundle and owned by this user. Gated
     /// per-file (any category), so everything a user can safely delete is
     /// deletable; system/other-owned files stay locked with a clear reason.
+    private func isRunning(_ file: ClusterFile) -> Bool {
+        file.path.lowercased().hasSuffix(".app") &&
+            model.runningAppPaths.contains(AppDiscovery.canonicalPath(file.path).lowercased())
+    }
     private func removable(_ f: ClusterFile) -> Bool {
-        drill.actionable && (drill.id != "applications" || AppDiscovery.isUserApplication(f.path))
-            && (drill.id != "messages" || f.path.contains("/Library/Messages/Attachments/"))
-            && CleanupExecutor.isRemovable(f.path)
-            && !AppProcessMatcher.isRunning(appPath: f.path, executables: model.runningExecutables)
+        eligiblePaths.contains(f.path) && !isRunning(f)
+    }
+    private func checkPermissions() async {
+        let files = drill.files, id = drill.id, actionable = drill.actionable
+        eligiblePaths = await Task.detached(priority: .userInitiated) {
+            Set(files.filter { file in
+                actionable && (id != "applications" || AppDiscovery.isUserApplication(file.path))
+                    && (id != "messages" || file.path.contains("/Library/Messages/Attachments/"))
+                    && CleanupExecutor.isRemovable(file.path)
+            }.map(\.path))
+        }.value
+        checkingPermissions = false
     }
     private var selectableFiltered: [ClusterFile] { filtered.filter(removable) }
     private var allFilteredSelected: Bool {
@@ -184,6 +198,7 @@ struct CategoryBrowser: View {
             footer
         }
         .frame(minWidth: 600, minHeight: 580)
+        .task { await checkPermissions() }
         .sheet(item: $aiRequest) { req in
             AIExplainSheet(request: req).environmentObject(ai)
         }
@@ -290,7 +305,7 @@ struct CategoryBrowser: View {
                     get: { selected.contains(file.path) },
                     set: { on in if on { selected.insert(file.path) } else { selected.remove(file.path) } }))
                     .labelsHidden().toggleStyle(.checkbox)
-            } else if AppProcessMatcher.isRunning(appPath: file.path, executables: model.runningExecutables) {
+            } else if isRunning(file) {
                 Image(systemName: "pause.circle").foregroundStyle(.secondary).frame(width: 16)
                     .help("This application is running. Quit it to select it; status updates automatically.")
             } else if bundle {
@@ -331,6 +346,7 @@ struct CategoryBrowser: View {
                 .buttonStyle(.borderless).help("Reveal in Finder")
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
     }
 
     /// "HEIF Image · Jan 12, 2024 · 590 days ago" — the file's kind (so an opaque
@@ -350,7 +366,7 @@ struct CategoryBrowser: View {
 
     private var footer: some View {
         HStack {
-            Text("\(selected.count) selected · \(Fmt.bytes(selectedBytes))")
+            Text(checkingPermissions ? "Checking file permissions…" : "\(selected.count) selected · \(Fmt.bytes(selectedBytes))")
                 .font(.callout).foregroundStyle(.secondary)
             Spacer()
             Button {

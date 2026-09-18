@@ -22,7 +22,7 @@ VERSION="${VERSION:-1.5.2}"
 BUILD="${BUILD:-152}"
 APP_NAME="Reclaim"
 PRODUCT="ReclaimApp"          # SPM executable target name
-DIST="dist"
+DIST="${DIST:-dist}"
 APP="$DIST/$APP_NAME.app"
 
 want_dmg=false; want_notarize=false

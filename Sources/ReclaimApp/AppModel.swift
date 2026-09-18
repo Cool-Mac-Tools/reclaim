@@ -36,7 +36,9 @@ final class AppModel: ObservableObject {
     @Published var scanStage = "Preparing scan…"
     @Published var scanCompletedStages = 0
     @Published var runningExecutables: Set<String> = []
+    @Published var runningAppPaths: Set<String> = []
     @Published var historyError: String?
+    @Published var historyWriteError: String?
     @Published var activityDiagram = false
     private var appObservers: [NSObjectProtocol] = []
 
@@ -55,6 +57,12 @@ final class AppModel: ObservableObject {
         let paths = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.compactMap { $0.bundleURL?.path }
         Task {
             runningExecutables = await Task.detached { RunningProcessProbe.snapshot() }.value
+            runningAppPaths = Set(paths.map { AppDiscovery.canonicalPath($0).lowercased() })
+            for path in runningExecutables {
+                if let range = path.range(of: ".app/", options: .caseInsensitive) {
+                    runningAppPaths.insert(AppDiscovery.canonicalPath(String(path[..<range.lowerBound]) + ".app").lowercased())
+                }
+            }
             _ = await Task.detached { try? AppUsageStore().record(paths: paths) }.value
             unusedApps.removeAll { app in paths.contains(app.path) }
         }
@@ -408,7 +416,7 @@ final class AppModel: ObservableObject {
             out.append(CleanItem(id: a.path, name: a.name,
                                  detail: a.rationale(), bytes: a.bytes, tier: .orange,
                                  source: a.usageUnknown ? "large-app" : "unused-app",
-                                 selectable: CleanupExecutor.isRemovable(a.path) && !AppProcessMatcher.isRunning(appPath: a.path, executables: runningExecutables), safe: false,
+                                 selectable: CleanupExecutor.isRemovable(a.path) && !runningAppPaths.contains(AppDiscovery.canonicalPath(a.path).lowercased()), safe: false,
                                  isDirectory: false, subtitle: a.subtitle()))
         }
         // De-dup by path (orphans already exclude recipe paths, but be safe).
@@ -434,17 +442,27 @@ final class AppModel: ObservableObject {
     /// Run a tool's own cleanup command (irreversible — not quarantine).
     func runCLI(_ command: SupportedCLI.Command) {
         guard busy == nil else { return }
+        do { _ = try PurgeLedgerStore().all() }
+        catch { actionAlert = "History is unavailable. Retry before running cleanup. \(error.localizedDescription)"; return }
         busy = "Running \(command.invocation)…"
         Task {
             let result = await Task.detached(priority: .userInitiated) {
                 SupportedCLI.run(command)
             }.value
+            let entry = PurgeLedgerEntry(succeeded: result.succeeded ? [command.recipeID] : [],
+                failed: result.succeeded ? [] : [command.recipeID], deletedBytes: result.deletedBytes,
+                freeBeforeBytes: result.freeBeforeBytes, freeAfterBytes: result.freeAfterBytes,
+                operation: command.label)
+            do { try PurgeLedgerStore().append(entry) }
+            catch { historyWriteError = "The cleanup finished, but its history could not be saved. \(error.localizedDescription)" }
             self.busy = nil
+            self.loadQuarantine()
             if result.succeeded {
                 self.actionAlert = "Ran `\(command.invocation)`.\nFreed \(Fmt.bytes(result.freedBytes))."
             } else {
                 self.actionAlert = "`\(command.invocation)` didn't finish cleanly:\n\(result.output)"
             }
+            if let historyWriteError { actionAlert = (actionAlert ?? "") + "\n\n" + historyWriteError }
             self.runEverything()
         }
     }
@@ -496,13 +514,13 @@ final class AppModel: ObservableObject {
 
             if !moved.isEmpty {
                 do { try LedgerStore().append(entry) }
-                catch { historyError = "Cleanup was saved in quarantine, but its history could not be recorded. Your existing history was preserved. \(error.localizedDescription)" }
+                catch { historyWriteError = "Cleanup was saved in quarantine, but its history could not be recorded. Your existing history was preserved. \(error.localizedDescription)" }
                 self.lastStagedBytes = entry.quarantinedBytes
                 self.lastFreedBytes = nil                 // staged, not yet freed
             }
             self.busy = nil
             self.loadQuarantine()
-            self.actionAlert = Self.reclaimSummary(moved: moved, skipped: skipped)
+            self.actionAlert = Self.reclaimSummary(moved: moved, skipped: skipped) + (historyWriteError.map { "\n\n" + $0 } ?? "")
             if !moved.isEmpty { self.section = .quarantine }
             self.runEverything()   // rescan so cleaned items drop off the list
         }
@@ -639,7 +657,7 @@ final class AppModel: ObservableObject {
             sessionID: "photos-" + df.string(from: Date()), startedAt: Date(),
             results: results, freeBeforeBytes: free, freeAfterBytes: free, snapshotsPresent: 0)
         do { try LedgerStore().append(entry) }
-        catch { historyError = "Could not record the Photos action. Existing history was preserved. \(error.localizedDescription)" }
+        catch { historyWriteError = "Could not record the Photos action. Existing history was preserved. \(error.localizedDescription)" }
     }
 
     // MARK: - Quarantine

@@ -9,7 +9,7 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let error = model.historyError {
+            if let error = model.historyError ?? model.historyWriteError {
                 Label(error, systemImage: "exclamationmark.triangle").font(.callout)
                     .foregroundStyle(.orange).padding()
                 Button("Retry loading history") { model.loadQuarantine() }.padding(.bottom)
@@ -77,6 +77,7 @@ struct HistoryView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                            if let operation = entry.operation { Text(operation).font(.caption).foregroundStyle(.secondary) }
                             Text("\(Fmt.bytes(entry.deletedBytes)) deleted · \(entry.failed.count) failed sessions")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
